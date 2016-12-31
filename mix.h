@@ -42,10 +42,7 @@ void error(char*, ...);
 void warn(char*, ...);
 void *emalloc(ulong);
 void *emallocz(ulong);
-void *ecalloc(ulong, ulong);
 void *erealloc(void*, ulong);
-Rune *erunestrdup(Rune*);
-void efmtprint(Fmt*, char*, ...);
 
 int star;
 Con *cons;
