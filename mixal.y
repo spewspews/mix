@@ -306,6 +306,8 @@ wval(int old, int exp, int fpart)
 			old |= SIGNB;
 		else
 			old &= ~SIGNB;
+		if(b == 0)
+			return old;
 		a = 1;
 	}
 	m = b-a;
