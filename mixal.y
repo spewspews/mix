@@ -189,8 +189,8 @@ defrefs(Sym *sym, int apart)
 	for(ref = sym->refs; ref < ep; ref++) {
 		inst = mem[*ref];
 //		print("defref on %d\n", *ref);
-		inst &= ~MASK2;
-		inst |= apart&MASK2;
+		inst &= ~(MASK2 << BITS*3);
+		inst |= (apart&MASK2) << BITS*3;
 		if(apart < 0)
 			inst |= SIGNB;
 		mem[*ref] = inst;
@@ -228,16 +228,16 @@ asm(Sym *op, int apart, int ipart, int fpart)
 	u32int inst;
 
 	print("asm %s %d %d %d\n", op->name, apart, ipart, fpart);
-	inst = apart & MASK2;
-
-	inst |= (ipart&MASK1) << BITS*2;
+	inst = op->opc & MASK1;
 
 	if(fpart == -1)
-		inst |= (op->f&MASK1) << BITS*3;
+		inst |= (op->f&MASK1) << BITS;
 	else
-		inst |= (fpart&MASK1) << BITS*3;
+		inst |= (fpart&MASK1) << BITS;
 
-	inst |= (op->opc&MASK1) << BITS*4;
+	inst |= (ipart&MASK1) << BITS*2;
+	
+	inst |= (apart&MASK2) << BITS*3;
 
 	if(apart < 0)
 		inst |= SIGNB;
@@ -251,14 +251,14 @@ refasm(Sym *op, int ipart, int fpart)
 	u32int inst;
 
 //	print("refasm %s %d %d\n", op->name, ipart, fpart);
-	inst = (ipart&MASK1) << BITS*2;
+	inst = op->opc & MASK1;
 
 	if(fpart == -1)
-		inst |= (op->f&MASK1) << BITS*3;
+		inst |= (op->f&MASK1) << BITS;
 	else
-		inst |= (fpart&MASK1) << BITS*3;
+		inst |= (fpart&MASK1) << BITS;
 
-	inst |= (op->opc&MASK1) << BITS*4;
+	inst |= (ipart&MASK1) << BITS*2;
 
 	mem[star++] = inst;
 }
@@ -270,11 +270,12 @@ con(int exp)
 	static int i;
 	static char buf[20];
 
-	seprint(buf, buf+20, "_con_%d\n", i++);
+	seprint(buf, buf+20, "con%d\n", i++);
 	c = emalloc(sizeof(*c));
 	c->sym = sym(buf);
 	c->exp = exp;
 	c->link = cons;
+	cons = c;
 	return c->sym;
 }
 
@@ -310,7 +311,7 @@ wval(int old, int exp, int fpart)
 			return old;
 		a = 1;
 	}
-	m = b-a;
+	m = b - a;
 	if(a > b || a > 5 || b > 5 || m > 4)
 		error("Invalid fpart");
 	val = exp & mask[m];

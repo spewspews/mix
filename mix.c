@@ -347,18 +347,19 @@ skipto(char c)
 int
 disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 {
-	int inst;
+	int inst, opc;
 
 	inst = mem[l];
-//	print("0x%x\n", inst);
+	print("%d\n", inst);
+	opc = inst & MASK1;
 	*sign = inst & SIGNB;
-	*apart = inst & MASK2;
-	inst >>= BITS*2;
-	*ipart = inst & MASK1;
 	inst >>= BITS;
 	*fpart = inst & MASK1;
 	inst >>= BITS;
-	return inst & MASK1;
+	*ipart = inst & MASK1;
+	inst >>= BITS;
+	*apart = inst & MASK2;
+	return opc;
 }
 
 void
