@@ -7,74 +7,70 @@
 
 %union {
 	Sym *sym;
-	int ival;
-	Rune r;
+	long lval;
+/*	Rune r; */
 }
 
-%type	<ival>	exp aexp ipart fpart wval apart
+%type	<lval>	exp aexp ipart fpart wval apart
 %type	<sym>	loc reflit
 
 %token	<sym>	LSYMDEF LSYMREF LOP LEQU LORIG LCON LALF LEND
-%token	<ival>	LNUM
-%token	<r>	LCHAR
+%token	<lval>	LNUM
+/* %token	<r>	LCHAR */
 
 %left '+' '-' '*' '/' LSS ':' ','
 
 %%
 
 prog:
-|	prog inst
+	prog1 end
+
+prog1:
+|	prog1 inst
 
 inst:
-	loc LOP '\n'
+	loc LOP eol
 	{
 		defloc($loc, star);
 		asm($LOP, 0, 0, -1);
 	}
-|	loc LOP ws apart ipart fpart
+|	loc LOP ws apart ipart fpart eol
 	{
 		defloc($loc, star);
 		asm($LOP, $apart, $ipart, $fpart);
-		skipto('\n');
 	}
-	'\n'
-|	loc LOP ws reflit ipart fpart
+|	loc LOP ws reflit ipart fpart eol
 	{
 		defloc($loc, star);
-		refasm($LOP, $ipart, $fpart);
 		addref($reflit, star);
-		skipto('\n');
+		refasm($LOP, $ipart, $fpart);
 	}
-	'\n'
-|	loc LEQU ws wval
+|	loc LEQU ws wval eol
 	{
 		defloc($loc, $wval);
-		skipto('\n');
 	}
-	'\n'
-|	loc LORIG ws wval
+|	loc LORIG ws wval eol
 	{
 		defloc($loc, star);
 		star = $wval;
-		skipto('\n');
 	}
-	'\n'
-|	loc LCON ws wval
+|	loc LCON ws wval eol
 	{
-		out($wval);
-		skipto('\n');
+		mem[star++] = $wval;
 	}
-	'\n'
-|	loc LEND ws wval
+
+end:
+	loc LEND ws wval eol
 	{
 		endprog($wval);
 		defloc($loc, star);
-		skipto('\n');
 	}
-	'\n'
 
 loc:
-	ws
+	{
+		$$ = nil;
+	}
+|	ws
 	{
 		$$ = nil;
 	}
@@ -111,6 +107,8 @@ fpart:
 	}
 |	'(' exp ')'
 	{
+		if($exp < 0)
+			error("invalid fpart %d\n", $exp);
 		$$ = $exp;
 	}
 
@@ -163,12 +161,16 @@ aexp:
 wval:
 	exp fpart
 	{
+//		print("got wval %ld\n", $exp);
 		$$ = wval(0, $exp, $fpart);
 	}
 |	wval ',' exp fpart
 	{
 		$$ = wval($wval, $exp, $fpart);
 	}
+
+eol:
+	'\n'
 
 ws:
 	' '
@@ -177,29 +179,47 @@ ws:
 %%
 
 void
-defrefs(Sym*, int)
+defrefs(Sym *sym, int apart)
 {
+	u32int inst;
+	int *ref, *ep;
+
+//	print("defref: %p %d\n", sym->refs, sym->i);
+	ep = sym->refs + sym->i;
+	for(ref = sym->refs; ref < ep; ref++) {
+		inst = mem[*ref];
+//		print("defref on %d\n", *ref);
+		inst &= ~MASK2;
+		inst |= apart&MASK2;
+		if(apart < 0)
+			inst |= SIGNB;
+		mem[*ref] = inst;
+	}
 }
 
 void
 defloc(Sym *sym, int val)
 {
-	if(sym != nil) {
-		defrefs(sym, val);
-		sym->lex = LSYMDEF;
-		free(sym->refs);
-		sym->val = val;
-	}
+	if(sym == nil)
+		return;
+//	print("defloc %s %d\n", sym->name, val);
+	defrefs(sym, val);
+//	print("defloc freeing %p\n", sym->refs);
+	free(sym->refs);
+	sym->lex = LSYMDEF;
+	sym->val = val;
 }
 
 void
 addref(Sym *ref, int star)
 {
+//	print("addref %p %d %d\n", ref->refs, ref->i, ref->max);
 	if(ref->refs == nil || ref->i == ref->max) {
 		ref->max = ref->max == 0 ? 3 : ref->max*2;
-		ref->refs = erealloc(ref->refs, ref->max);
+		ref->refs = erealloc(ref->refs, ref->max * sizeof(int));
 	}
 	ref->refs[ref->i++] = star;
+//	print("addedref %p %d %d\n", ref->refs, ref->i, ref->max);
 }
 
 void
@@ -207,41 +227,93 @@ asm(Sym *op, int apart, int ipart, int fpart)
 {
 	u32int inst;
 
-	inst = op->opc & MASK1;
-	inst |= (ipart&MASK1) << 6;
+	print("asm %s %d %d %d\n", op->name, apart, ipart, fpart);
+	inst = apart & MASK2;
+
+	inst |= (ipart&MASK1) << BITS*2;
+
 	if(fpart == -1)
-		inst |= (op->f&MASK1) << 12;
+		inst |= (op->f&MASK1) << BITS*3;
 	else
-		inst |= (fpart&MASK1) << 12;
-	inst |= (apart&MASK2) << 18;
+		inst |= (fpart&MASK1) << BITS*3;
+
+	inst |= (op->opc&MASK1) << BITS*4;
+
 	if(apart < 0)
-		inst |= SIGNB
-	mem[star] = inst;
+		inst |= SIGNB;
+
+	mem[star++] = inst;
 }
 
 void
-refasm(Sym*, int, int)
+refasm(Sym *op, int ipart, int fpart)
 {
-}
+	u32int inst;
 
-void
-out(int)
-{
+//	print("refasm %s %d %d\n", op->name, ipart, fpart);
+	inst = (ipart&MASK1) << BITS*2;
+
+	if(fpart == -1)
+		inst |= (op->f&MASK1) << BITS*3;
+	else
+		inst |= (fpart&MASK1) << BITS*3;
+
+	inst |= (op->opc&MASK1) << BITS*4;
+
+	mem[star++] = inst;
 }
 
 Sym*
-con(int)
+con(int exp)
 {
-	return nil;
+	Con *c;
+	static int i;
+	static char buf[20];
+
+	seprint(buf, buf+20, "_con_%d\n", i++);
+	c = emalloc(sizeof(*c));
+	c->sym = sym(buf);
+	c->exp = exp;
+	c->link = cons;
+	return c->sym;
 }
 
 void
-endprog(int)
+endprog(int start)
 {
+	Con *c;
+	for(c = cons; c != nil; c = c->link) {
+		defloc(c->sym, star);
+		mem[star++] = c->exp;
+	}
+	vmstart = start;
+	yydone = 1;
 }
 
 int
-wval(int, int, int)
+wval(int old, int exp, int fpart)
 {
-	return 0;
+	int a, b, val, m;
+
+	if(fpart == -1) {
+		a = 0;
+		b = 5;
+	} else {
+		UNF(a, b, fpart);
+	}
+	if(a == 0) {
+		if(exp < 0)
+			old |= SIGNB;
+		else
+			old &= ~SIGNB;
+		a = 1;
+	}
+	m = b-a;
+	if(a > b || a > 5 || b > 5 || m > 4)
+		error("Invalid fpart");
+	val = exp & mask[m];
+	val <<= (5-b) * BITS;
+	old &= ~(mask[m] << (5-b)*BITS);
+	old |= val;
+	return old;
 }

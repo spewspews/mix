@@ -6,7 +6,7 @@ typedef struct Con Con;
 struct Sym {
 	Avl;
 	char *name;
-	int lex;
+	long lex;
 	union {
 		struct {
 			int opc, f;	/* LOP */
@@ -20,18 +20,23 @@ struct Sym {
 };
 
 struct Con {
-	Sym *s;
+	Sym *sym;
 	int exp;
 	Con *link;
 };
 
+void mixvm(void);
+
 long yylex(void);
 int yyparse(void);
 void yyerror(char*);
-int skipto(char);
+void skipto(char);
+Sym *sym(char*);
+void sinit(void);
 
 Rune mixtorune(int);
 int runetomix(Rune);
+void cinit(void);
 
 void error(char*, ...);
 void warn(char*, ...);
@@ -43,18 +48,23 @@ Rune *erunestrdup(Rune*);
 void efmtprint(Fmt*, char*, ...);
 
 int star;
+Con *cons;
 char *filename;
 int line;
-
-int mem[4000];
+int vmstart;
+int yydone;
+extern int mask[5];
+u32int mem[4000];
 
 #define F(a, b) 8*(a)+(b)
+#define UNF(a, b, f) (a) = f/8; (b) = f%8
 
 enum {
-	MASK1 = 0x3f,
-	MASK2 = 0xfff,
-	MASK3 = 0x3fff,
-	MASK4 = 0xffffff,
-	MASK5 = 0x3fffffff,
+	BITS = 6,
+	MASK1 = 63,
+	MASK2 = (63<<6) | MASK1,
+	MASK3 = (63<<12) | MASK2,
+	MASK4 = (63<<18) | MASK3,
+	MASK5 = (63<<24) | MASK4,
 	SIGNB = 1<<31,
 };

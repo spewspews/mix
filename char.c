@@ -31,6 +31,7 @@ static Rune mixtor[] = {
 	'O',
 	'P',
 	'Q',
+	'R',
 	L'Σ',
 	L'Π',
 	'S',
@@ -106,10 +107,13 @@ runetomix(Rune r)
 {
 	Mixchar *c, l;
 
+//	print("looking up %C\n", r);
 	l.r = r;
 	c = (Mixchar*)avllookup(rtomix, &l);
-	if(c == nil)
+	if(c == nil) {
+//		print("Not found!!\n");
 		return -1;
+	}
 
 	return c->m;
 }

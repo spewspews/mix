@@ -1,5 +1,7 @@
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
+#include <bio.h>
 #include <avl.h>
 #include "mix.h"
 #include "y.tab.h"
@@ -8,7 +10,7 @@ Avltree *syms;
 
 struct Resvd {
 	char *name;
-	int lex;
+	long lex;
 	int c;
 	int f;
 } res[] = {
@@ -168,17 +170,40 @@ struct Resvd {
 	{ "END",	LEND,	-1,	-1 },
 };
 
+int mask[] = {
+	MASK1,
+	MASK2,
+	MASK3,
+	MASK4,
+	MASK5
+};
+
 int symcmp(Avl*, Avl*);
 Sym *sym(char*);
+Biobuf bin;
 
 void
 main(int argc, char **argv)
 {
-	struct Resvd *r;
-	Sym *s;
-
 	ARGBEGIN {
 	} ARGEND
+
+	Binit(&bin, 0, OREAD);
+	line = 0;
+	cinit();
+	sinit();
+	if(yyparse() != 0) {
+		fprint(2, "Parsing failed\n");
+		exits("Parsing");
+	}
+	mixvm();
+}
+
+void
+sinit(void)
+{
+	struct Resvd *r;
+	Sym *s;
 
 	syms = avlcreate(symcmp);
 	for(r = res; r < res + nelem(res); r++) {
@@ -186,8 +211,96 @@ main(int argc, char **argv)
 		s->lex = r->lex;
 		s->opc = r->c;
 		s->f = r->f;
+		avlinsert(syms, s);
 	}
-	yyparse();
+}
+
+long
+yylex(void)
+{
+	static Rune buf[11];
+	Rune r, *bp, *ep;
+	static char cbuf[100];
+	int isnum;
+
+	if(yydone)
+		return -1;
+	r = Bgetrune(&bin);
+	switch(r) {
+	case Beof:
+		return -1;
+	case '\t':
+		return ' ';
+	case '\n':
+		line++;
+	case '+':
+	case '-':
+	case '*':
+	case ':':
+	case ',':
+	case '(':
+	case ')':
+	case '=':
+	case ' ':
+		return r;
+	case '/':
+		r = Bgetrune(&bin);
+		if(r == '/')
+			return LSS;
+		else
+			Bungetrune(&bin);
+		return '/';
+	case '#':
+		skipto('\n');
+		return '\n';
+	}
+	bp = buf;
+	ep = buf+nelem(buf)-1;
+	isnum = 1;
+	for(;;) {
+//		print("forming sym %C\n", r);
+		if(runetomix(r) == -1) 
+			error("Invalid character");
+		if(bp == ep)
+			error("Symbol or number too long");
+		*bp++ = r;
+		if(isnum && (r >= Runeself || !isdigit(r)))
+			isnum = 0;
+		r = Bgetrune(&bin);
+		switch(r) {
+		case Beof:
+		case '\t':
+		case '\n':
+		case '+':
+		case '-':
+		case '*':
+		case ':':
+		case ',':
+		case '(':
+		case ')':
+		case '=':
+		case ' ':
+		case '/':
+			Bungetrune(&bin);
+			*bp = '\0';
+			goto End;
+		}
+	}
+End:
+	seprint(cbuf, cbuf+100, "%S", buf);
+	if(isnum) {
+		yylval.lval = strtol(cbuf, nil, 10);
+		return LNUM;
+	}
+	yylval.sym = sym(cbuf);
+//	print("yylex %s %ld\n", yylval.sym->name, yylval.sym->lex);
+	return yylval.sym->lex;
+}
+
+void
+yyerror(char *e)
+{
+	error(e);
 }
 
 Sym*
@@ -204,6 +317,7 @@ sym(char *name)
 	strcpy(s->nbuf, name);
 	s->name = s->nbuf;
 	s->lex = LSYMREF;
+	avlinsert(syms, s);
 	return s;
 }
 
@@ -217,8 +331,53 @@ symcmp(Avl *a, Avl *b)
 	return strcmp(sa->name, sb->name);
 }
 
-int
-skipto(char)
+void
+skipto(char c)
 {
-	return 0;
+	Rune r;
+
+	for(;;) {
+		r = Bgetrune(&bin);
+		if(r != c)
+			continue;
+		return;
+	}
+}
+
+int
+disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
+{
+	int inst;
+
+	inst = mem[l];
+//	print("0x%x\n", inst);
+	*sign = inst & SIGNB;
+	*apart = inst & MASK2;
+	inst >>= BITS*2;
+	*ipart = inst & MASK1;
+	inst >>= BITS;
+	*fpart = inst & MASK1;
+	inst >>= BITS;
+	return inst & MASK1;
+}
+
+void
+mixvm(void)
+{
+	char buf[512];
+	long l, r;
+	int sign, apart, ipart, fpart, opc;
+
+	for(;;) {
+		print("μ ");
+		r = read(0, buf, sizeof(buf));
+		if(r <= 0)
+			exits(nil);
+		if(r == 1)
+			continue;
+		buf[r] = '\0';
+		l = strtol(buf, nil, 10);
+		opc = disasm(l, &sign, &apart, &ipart, &fpart);
+		print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
+	}
 }

@@ -1,7 +1,7 @@
 </$objtype/mkfile
 
 TARG=mix
-YFILES=mix.y
+YFILES=mixal.y
 OFILES=y.tab.$O\
 	mix.$O\
 	char.$O\
