@@ -498,23 +498,19 @@ void
 mixmul(int a, int i, int f)
 {
 	vlong rval;
-	int sign;
+	int signb;
 
 	rval = mval(ra, 0, MASK5);
 	rval *= V(a, i, f);
 
 	if(rval < 0) {
 		rval = -rval;
-		sign = 1;
+		signb = SIGNB;
 	} else
-		sign = 0;
+		signb = 0;
 
-	ra = rval>>5*BITS & MASK5;
-	rx = rval & MASK5;
-	if(sign) {
-		ra |= SIGNB;
-		rx |= SIGNB;
-	}
+	ra = rval>>5*BITS & MASK5 & signb;
+	rx = rval & MASK5 & signb;
 }
 
 void mixfdiv(int){}
@@ -522,7 +518,7 @@ void mixfdiv(int){}
 void mixdiv(int a, int i, int f)
 {
 	vlong rax, quot;
-	u32int xsign, asign;
+	u32int xsignb, asignb;
 	int rem, v;
 
 	v = V(a, i, f);
@@ -541,25 +537,21 @@ void mixdiv(int a, int i, int f)
 
 	if(quot < 0) {
 		quot = -quot;
-		asign = 1;
+		asignb = SIGNB;
 	} else
-		asign = 0;
+		asignb = 0;
+
+	if(rem < 0) {
+		rem = -rem;
+		xsignb = SIGNB;
+	} else
+		xsignb = 0;
 
 	if(quot & ~MASK5)
 		ot = 1;
 
-	if(rem < 0) {
-		rem = -rem;
-		xsign = 1;
-	} else
-		xsign = 0;
-
-	ra = quot & MASK5;
-	rx = rem & MASK5;
-	if(asign)
-		ra |= SIGNB;
-	if(xsign)
-		rx |= SIGNB;
+	ra = quot & MASK5 & asignb;
+	rx = rem & MASK5 & xsignb;
 }
 
 void
@@ -612,21 +604,108 @@ void mixhalt(void)
 }
 
 void
-mixsla(int a, int i)
+mixslra(int a, int i, int left)
 {
-	int val;
+	u32int val;
+	int m;
 
+	m = M(a, i);
+	if(m < 0)
+		error("Bad shift");
+	if(m > 4) {
+		ra &= ~MASK5;
+		return;
+	}
 	val = ra & MASK5;
-	val >>= M(a, i) * BITS;
 	ra &= ~MASK5;
-	ra |= val;
+	if(left)
+		val <<= m * BITS;
+	else
+		val >>= m * BITS;
+	ra |= val & MASK5;
 }
 
-void mixsra(int){}
-void mixslax(int){}
-void mixsrax(int){}
-void mixslc(int){}
-void mixsrc(int){}
+void
+mixslrax(int a, int i, int left)
+{
+	u64int rax;
+	int m;
+
+	m = M(a, i);
+	if(m < 0)
+		error("Bad shift");
+	if(m > 9) {
+		ra &= ~MASK5;
+		rx &= ~MASK5;
+		return;
+	}
+	rax = ra & MASK5;
+	ra &= ~MASK5;
+	rax <<= 5 * BITS;
+	rax |= rx & MASK5;
+	rx &= ~MASK5;
+	if(left)
+		rax <<= m;
+	else
+		rax >>= m;
+	rx |= rax & MASK5;
+	ra |= rax>>5*BITS & MASK5;
+}
+
+void
+mixslc(int a, int i)
+{
+	u64int rax, s;
+	int m;
+
+	m = M(a, i);
+	if(m < 0)
+		error("Bad shift");
+
+	m %= 10;
+
+	rax = ra & MASK5;
+	ra &= ~MASK5;
+	rax <<= 5 * BITS;
+	rax |= rx & MASK5;
+	rx &= ~MASK5;
+
+	s = rax & mask[m]<<10-m;
+	rax <<= m;
+	rax &= ~mask[m];
+	rax |= s;
+
+	rx |= rax & MASK5;
+	ra |= rax>>5*BITS & MASK5;
+}
+
+void
+mixsrc(int a, int i)
+{
+	u64int rax, s;
+	int m;
+
+	m = M(a, i);
+	if(m < 0)
+		error("Bad shift");
+
+	m %= 10;
+
+	rax = ra & MASK5;
+	ra &= ~MASK5;
+	rax <<= 5 * BITS;
+	rax |= rx & MASK5;
+	rx &= ~MASK5;
+
+	s = rax & mask[m];
+	rax >>= m;
+	rax &= ~mask[m] << 10-m;
+	rax |= s<<10-m;
+
+	rx |= rax & MASK5;
+	ra |= rax>>5*BITS & MASK5;
+}
+
 void mixmove(int){}
 void mixlda(int){}
 void mixldi(int){}
@@ -704,22 +783,22 @@ Top:
 			default:
 				error("Bad instruction");
 			case 0:
-				mixsla(a, i);
+				mixslra(a, i, 1);
 				break;
 			case 1:
-				mixsra(inst);
+				mixslra(a, i, 0);
 				break;
 			case 2:
-				mixslax(inst);
+				mixslrax(a, i, 1);
 				break;
 			case 4:
-				mixsrax(inst);
+				mixslrax(a, i, 0);
 				break;
 			case 5:
-				mixslc(inst);
+				mixslc(a, i);
 				break;
 			case 6:
-				mixsrc(inst);
+				mixsrc(a, i);
 				break;
 			}
 			break;
