@@ -545,7 +545,7 @@ void mixdiv(int a, int i, int f)
 	} else
 		asign = 0;
 
-	if(quot & MASK5)
+	if(quot & ~MASK5)
 		ot = 1;
 
 	if(rem < 0) {
