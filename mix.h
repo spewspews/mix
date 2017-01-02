@@ -53,10 +53,9 @@ int yydone;
 extern int mask[5];
 u32int cells[4000];
 
-u32int ra, rx, r[7];
+u32int ra, rx, ri[7];
 int ce, cl, cg, ot;
 
-#define RJ ri[0]
 #define F(a, b) 8*(a)+(b)
 #define UNF(a, b, f) ((a) = f/8, (b) = f%8)
 
