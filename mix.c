@@ -616,7 +616,7 @@ mixsla(int a, int i)
 {
 	int val;
 
-	val = ra&MASK5;
+	val = ra & MASK5;
 	val >>= M(a, i) * BITS;
 	ra &= ~MASK5;
 	ra |= val;
