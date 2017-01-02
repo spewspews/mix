@@ -349,26 +349,30 @@ disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 {
 	int inst, opc;
 
-	inst = mem[l];
+	inst = cells[l];
 	print("%d\n", inst);
+	*sign = inst&SIGNB;
 	opc = inst & MASK1;
-	*sign = inst & SIGNB;
 	inst >>= BITS;
 	*fpart = inst & MASK1;
 	inst >>= BITS;
 	*ipart = inst & MASK1;
 	inst >>= BITS;
 	*apart = inst & MASK2;
+
 	return opc;
 }
 
-int r[2], ri[7], ce, cl, cg, ot;
-#define ra r[0]
-#define rx r[1]
-#define rj ri[0]
+void dovm(int);
 
 void
 mixvm(void)
+{
+	dovm(vmstart);
+}
+
+void
+query(void)
 {
 	char buf[512];
 	long l, r;
@@ -382,72 +386,261 @@ mixvm(void)
 		if(r == 1)
 			continue;
 		buf[r] = '\0';
+		if(buf[0] == 'r') {
+			switch(buf[1]) {
+			case 'a':
+				print("%d\n", RAVAL);
+				break;
+			case 'x':
+				print("%d\n", RXVAL);
+				break;
+			}
+			continue;
+		}
 		l = strtol(buf, nil, 10);
 		opc = disasm(l, &sign, &apart, &ipart, &fpart);
 		print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
 	}
 }
 
-#define FC(inst) ((inst)&MASK1)
-#define FF(inst) ((inst)>>BITS & MASK1)
-#define FI(inst) ((inst)>>BITS*2 & MASK1)
-#define FA(inst) \
-	(((inst)&SIGNB) ? \
-		-((inst)>>BITS*3 & MASK2) : \
-		((inst)>>BITS*3 & MASK2))
-
-void mixfadd(int,int){};
-void mixadd(int,int,int){};
-void mixfsub(int,int){};
-void mixsub(int,int,int){};
-void mixfmul(int,int){};
-void mixmul(int,int,int){};
-void mixfdiv(int,int){};
-void mixdiv(int,int,int){};
-void mixnum(void){};
-void mixchar(void){};
-void mixhalt(void){};
-void mixsla(int){};
-void mixsra(int){};
-void mixslax(int){};
-void mixsrax(int){};
-void mixslc(int){};
-void mixsrc(int){};
-
 int
-dovm(int l)
+V(int c, int f)
 {
-	int inst, opc;
+	u32int word;
+	int sign, a, b, m;
+
+	UNF(a, b, f);
+
+	if(a > 5 || b > 5)
+		error("Invalid fpart");
+
+	word = cells[c];
+
+	if(a == 0) {
+		sign = word&SIGNB;
+		a = 1;
+	} else
+		sign = 0;
+
+	m = b - a;
+	if(m < 0 || m > 4)
+		error("Invalid fpart");
+
+	word >>= ((5-b)*BITS);
+	word &= mask[m];
+	return sign ? -(int)word : word;
+}
+
+void mixfadd(int){}
+
+void
+mixadd(int inst)
+{
+	int rval;
+	UNPACK(inst);
+
+//	print("mixadd ra: %d\n", ra);
+	rval = RAVAL;
+//	print("mixadd raval: %d\n", rval);
+	rval += V(m, f);
+//	print("mixadd result: %d\n", rval);
+	ra = rval < 0 ? -rval|SIGNB : rval;
+	if(ra & OVERB) {
+		ra &= ~OVERB;
+		ot = 1;
+	}
+}
+
+void mixfsub(int){}
+
+void
+mixsub(int inst)
+{
+	int rval;
+	UNPACK(inst);
+
+	rval = RAVAL;
+	rval += V(m, f);
+	ra = rval < 0 ? -rval|SIGNB : rval;
+	if(ra & OVERB) {
+		ra &= ~OVERB;
+		ot = 1;
+	}
+}
+
+void mixfmul(int){}
+
+void
+mixmul(int inst)
+{
+	vlong rval;
+	u32int signb;
+	UNPACK(inst);
+
+	rval = RAVAL;
+	rval *= V(m, f);
+
+	if(rval < 0) {
+		rval = -rval;
+		signb = SIGNB;
+	} else
+		signb = ~SIGNB;
+
+	ra = rval>>5 & MASK5 & signb;
+	rx = rval & MASK5 & signb;
+}
+
+void mixfdiv(int){}
+
+void mixdiv(int inst)
+{
+	vlong divend;
+	u32int xsignb, signb;
+	int quot, rem, v;
+
+	UNPACK(inst);
+
+	v = V(m, f);
+	if(v == 0) {
+		ot = 1;
+		return;
+	}
+	divend = ra & MASK5;
+	divend <<= BITS * 5;
+	divend |= rx & MASK5;
+	if(ra & SIGNB)
+		divend = -divend;
+
+	quot = divend / v;
+	rem = divend % v;
+
+	if(quot < 0) {
+		quot = -quot;
+		signb = SIGNB;
+	} else
+		signb = ~SIGNB;
+
+	if(rem < 0) {
+		rem = -rem;
+		xsignb = SIGNB;
+	} else
+		xsignb = ~SIGNB;
+
+	ra = quot & signb;
+	rx = rem & xsignb;
+	if(ra & OVERB) {
+		ra &= ~OVERB;
+		ot = 1;
+	}
+}
+
+void
+mixnum(void)
+{
+	int i, b;
+	u32int n;
+
+	n = 0;
+	for(i = 0; i < 5; i++) {
+		b = ra>>(4-i)*BITS & MASK1;
+		b %= 10;
+		n = 10*n + b;
+	}
+	for(i = 0; i < 5; i++) {
+		b = rx>>(4-i)*BITS & MASK1;
+		b %= 10;
+		n = 10*n + b;
+	}
+	ra &= ~MASK5;
+	ra |= n & MASK5;
+}
+
+void
+mixchar(void)
+{
+	int i;
+	u32int a, val;
+
+	val = ra;
+	for(i = 0; i < 5; i++) {
+		a = val % 10;
+		a += 30;
+		rx &= ~(MASK1<<i);
+		rx |= a<<i;
+		val /= 10;
+	}
+	for(i = 0; i < 5; i++) {
+		a = val % 10;
+		a += 30;
+		ra &= ~(MASK1<<i);
+		ra |= a<<i;
+		val /= 10;
+	}
+}
+
+void mixhalt(void)
+{
+	query();
+}
+
+void mixsla(int){}
+void mixsra(int){}
+void mixslax(int){}
+void mixsrax(int){}
+void mixslc(int){}
+void mixsrc(int){}
+void mixmove(int){}
+void mixlda(int){}
+void mixldi(int){}
+void mixldx(int){}
+void mixldan(int){}
+void mixldin(int){}
+void mixldxn(int){}
+void mixsta(int){}
+void mixsti(int){}
+void mixstx(int){}
+int mixjbus(int){ return 0; }
+void mixioc(int){}
+void mixin(int){}
+void mixout(int){}
+
+void
+dovm(int ip)
+{
+	int inst;
 
 Top:
 	for (;;) {
-		inst = mem[l];
-		switch(opc = FC(inst)) {
+		inst = cells[ip];
+		switch(FC(inst)) {
+		default:
+			fprint(2, "Bad op!\n");
+			exits("error");
 		case 0:
 			break;
 		case 1:
 			if(FF(inst) == 6)
-				mixfadd(FA(inst), FI(inst));
+				mixfadd(inst);
 			else
-				mixadd(FA(inst), FI(inst), FF(inst));
+				mixadd(inst);
 			break;
 		case 2:
 			if(FF(inst) == 6)
-				mixfsub(FA(inst), FI(inst));
+				mixfsub(inst);
 			else
-				mixsub(FA(inst), FI(inst), FF(inst));
+				mixsub(inst);
 			break;
 		case 3:
 			if(FF(inst) == 6)
-				mixfmul(FA(inst), FI(inst));
+				mixfmul(inst);
 			else
-				mixmul(FA(inst), FI(inst), FF(inst));
+				mixmul(inst);
 			break;
 		case 4:
 			if(FF(inst) == 6)
-				mixfdiv(FA(inst), FI(inst));
+				mixfdiv(inst);
 			else
-				mixdiv(FA(inst), FI(inst), FF(inst));
+				mixdiv(inst);
 			break;
 		case 5:
 			switch(FF(inst)) {
@@ -469,71 +662,71 @@ Top:
 			default:
 				error("Bad instruction");
 			case 0:
-				mixsla(FA(inst), FI(inst));
+				mixsla(inst);
 				break;
 			case 1:
-				mixsra(FA(inst), FI(inst));
+				mixsra(inst);
 				break;
 			case 2:
-				mixslax(FA(inst), FI(inst));
+				mixslax(inst);
 				break;
 			case 4:
-				mixsrax(FA(inst), FI(inst));
+				mixsrax(inst);
 				break;
 			case 5:
-				mixslc(FA(inst), FI(inst));
+				mixslc(inst);
 				break;
 			case 6:
-				mixsrc(FA(inst), FI(inst));
+				mixsrc(inst);
 				break;
 			}
 			break;
 		case 7:
-			mixmove(FA(inst), FI(inst), FF(inst));
+			mixmove(inst);
 			break;
 		case 8:
-			mixlda(FA(inst), FI(inst), FF(inst))
+			mixlda(inst);
 			break;
 		case 9: case 10: case 11:
-		case 12: case 13 case 14:
-			mixldi(FA(inst), FI(inst), FF(inst), opc-8);
+		case 12: case 13: case 14:
+			mixldi(inst);
 			break;
 		case 15:
-			mixldx(FA(inst), FI(inst), FF(inst));
+			mixldx(inst);
 			break;
 		case 16:
-			mixldan(FA(inst), FI(inst), FF(inst));
+			mixldan(inst);
 			break;
 		case 17: case 18: case 19:
 		case 20: case 21: case 22:
-			mixldin(FA(inst), FI(inst), FF(inst), opc-16);
+			mixldin(inst);
 			break;
 		case 23:
-			mixldxn(FA(inst), FI(inst), FF(inst));
+			mixldxn(inst);
 			break;
 		case 24:
-			mixsta(FA(inst), FI(inst), FF(inst));
+			mixsta(inst);
 			break;
 		case 25: case 26: case 27:
 		case 28: case 29: case 30:
-			mixsti(FA(inst), FI(inst), FF(inst), opc-24);
+			mixsti(inst);
 			break;
 		case 31:
-			mixstx(FA(inst), FI(inst), FF(inst));
+			mixstx(inst);
 			break;
 		case 32:
-			l = mixjbus(FF(inst), FI(inst));
+			ip = mixjbus(inst);
 			goto Top;
 		case 33:
-			mixioc(FA(inst), FI(inst), FF(inst));
+			mixioc(inst);
 			break;
 		case 34:
-			mixin(FA(inst), FI(inst), FF(inst));
+			mixin(inst);
 			break;
 		case 35:
-			mixout(FA(inst), FI(inst), FF(inst));
+			mixout(inst);
 			break;
 		}
-		l++;
+		ip++;
 	}
 }

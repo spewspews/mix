@@ -8,10 +8,12 @@
 %union {
 	Sym *sym;
 	long lval;
+	u32int mval;
 /*	Rune r; */
 }
 
-%type	<lval>	exp aexp ipart fpart wval apart
+%type	<lval>	wval apart exp aexp fpart ipart
+%type	<mval>	wval1
 %type	<sym>	loc reflit
 
 %token	<sym>	LSYMDEF LSYMREF LOP LEQU LORIG LCON LALF LEND
@@ -54,9 +56,10 @@ inst:
 		defloc($loc, star);
 		star = $wval;
 	}
-|	loc LCON ws wval eol
+|	loc LCON ws wval1 eol
 	{
-		mem[star++] = $wval;
+		defloc($loc, star);
+		cells[star++] = $wval1;
 	}
 
 end:
@@ -121,6 +124,7 @@ exp:
 |	'-' aexp
 	{
 		$$ = -$aexp;
+//		print("aexp unary neg %ld\n", $$);
 	}
 |	exp '+' aexp
 	{
@@ -151,7 +155,15 @@ aexp:
 	LNUM
 |	LSYMDEF
 	{
-		$$ = ($LSYMDEF)->val;
+		u32int mval;
+
+		mval = ($LSYMDEF)->mval;
+		if(mval & SIGNB) {
+			mval &= ~SIGNB;
+			$$ = -((long)mval);
+		} else
+			$$ = mval;
+		print("aexp sym: %s, %ld\n", ($LSYMDEF)->name, $$);
 	}
 |	'*'
 	{
@@ -159,6 +171,15 @@ aexp:
 	}
 
 wval:
+	wval1
+	{
+		if($wval1 & SIGNB)
+			$$ = -(long)($wval1 & MASK5);
+		else
+			$$ = $wval1;
+	}
+
+wval1:
 	exp fpart
 	{
 //		print("got wval %ld\n", $exp);
@@ -179,26 +200,29 @@ ws:
 %%
 
 void
-defrefs(Sym *sym, int apart)
+defrefs(Sym *sym, long apart)
 {
-	u32int inst;
+	u32int inst, mval;
 	int *ref, *ep;
 
 //	print("defref: %p %d\n", sym->refs, sym->i);
 	ep = sym->refs + sym->i;
 	for(ref = sym->refs; ref < ep; ref++) {
-		inst = mem[*ref];
+		inst = cells[*ref];
 //		print("defref on %d\n", *ref);
 		inst &= ~(MASK2 << BITS*3);
-		inst |= (apart&MASK2) << BITS*3;
-		if(apart < 0)
+		if(apart < 0) {
+			mval = -apart;
 			inst |= SIGNB;
-		mem[*ref] = inst;
+		} else
+			mval = apart;
+		inst |= (mval&MASK2) << BITS*3;
+		cells[*ref] = inst;
 	}
 }
 
 void
-defloc(Sym *sym, int val)
+defloc(Sym *sym, long val)
 {
 	if(sym == nil)
 		return;
@@ -207,11 +231,11 @@ defloc(Sym *sym, int val)
 //	print("defloc freeing %p\n", sym->refs);
 	free(sym->refs);
 	sym->lex = LSYMDEF;
-	sym->val = val;
+	sym->mval = val < 0 ? -val|SIGNB : val;
 }
 
 void
-addref(Sym *ref, int star)
+addref(Sym *ref, long star)
 {
 //	print("addref %p %d %d\n", ref->refs, ref->i, ref->max);
 	if(ref->refs == nil || ref->i == ref->max) {
@@ -223,11 +247,11 @@ addref(Sym *ref, int star)
 }
 
 void
-asm(Sym *op, int apart, int ipart, int fpart)
+asm(Sym *op, long apart, long ipart, long fpart)
 {
-	u32int inst;
+	u32int inst, mval;
 
-	print("asm %s %d %d %d\n", op->name, apart, ipart, fpart);
+//	print("asm %s %d %d %d\n", op->name, apart, ipart, fpart);
 	inst = op->opc & MASK1;
 
 	if(fpart == -1)
@@ -236,17 +260,19 @@ asm(Sym *op, int apart, int ipart, int fpart)
 		inst |= (fpart&MASK1) << BITS;
 
 	inst |= (ipart&MASK1) << BITS*2;
-	
-	inst |= (apart&MASK2) << BITS*3;
 
-	if(apart < 0)
+	if(apart < 0) {
+		mval = -apart;
 		inst |= SIGNB;
+	} else
+		mval = apart;
+	inst |= (mval&MASK2) << BITS*3;
 
-	mem[star++] = inst;
+	cells[star++] = inst;
 }
 
 void
-refasm(Sym *op, int ipart, int fpart)
+refasm(Sym *op, long ipart, long fpart)
 {
 	u32int inst;
 
@@ -260,7 +286,7 @@ refasm(Sym *op, int ipart, int fpart)
 
 	inst |= (ipart&MASK1) << BITS*2;
 
-	mem[star++] = inst;
+	cells[star++] = inst;
 }
 
 Sym*
@@ -285,38 +311,47 @@ endprog(int start)
 	Con *c;
 	for(c = cons; c != nil; c = c->link) {
 		defloc(c->sym, star);
-		mem[star++] = c->exp;
+		cells[star++] = c->exp;
 	}
 	vmstart = start;
 	yydone = 1;
 }
 
-int
-wval(int old, int exp, int fpart)
+u32int
+wval(u32int old, int exp, int fpart)
 {
-	int a, b, val, m;
+	int a, b, val, m, sign;
 
 	if(fpart == -1) {
-		a = 0;
-		b = 5;
-	} else {
-		UNF(a, b, fpart);
-	}
-	if(a == 0) {
 		if(exp < 0)
-			old |= SIGNB;
+			return -exp | SIGNB;
 		else
-			old &= ~SIGNB;
+			return exp;
+	}
+
+	UNF(a, b, fpart);
+
+	if(a > 5 || b > 5)
+		error("Invalid fpart");
+
+	if(exp < 0) {
+		sign = 1;
+		exp = -exp;
+	} else
+		sign = 0;
+
+	if(a == 0) {
+		old = sign ? old|SIGNB : old&~SIGNB;
 		if(b == 0)
 			return old;
 		a = 1;
 	}
+
 	m = b - a;
-	if(a > b || a > 5 || b > 5 || m > 4)
+	if(m < 0 || m > 4)
 		error("Invalid fpart");
 	val = exp & mask[m];
 	val <<= (5-b) * BITS;
 	old &= ~(mask[m] << (5-b)*BITS);
-	old |= val;
-	return old;
+	return old | val;
 }
