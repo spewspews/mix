@@ -501,13 +501,7 @@ mixmul(int a, int i, int f)
 	int sign;
 
 	rval = mval(ra, 0, MASK5);
-
-	print("mixmul: ra %ud rval %lld\n", ra, rval);
 	rval *= V(a, i, f);
-
-	print("mixmul result: %lld\n", rval);
-	print("ra should be: %lld\n", rval >> 5*BITS);
-	print("rx should be: %lld\n", rval & MASK5);
 
 	if(rval < 0) {
 		rval = -rval;
