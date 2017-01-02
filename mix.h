@@ -59,24 +59,6 @@ int ce, cl, cg, ot;
 #define RJ ri[0]
 #define F(a, b) 8*(a)+(b)
 #define UNF(a, b, f) ((a) = f/8, (b) = f%8)
-#define M(a, i) ((i) == 0 ? (a) : (a)+r[(i)])
-#define FC(inst) ((inst)&MASK1)
-#define FF(inst) ((inst)>>BITS & MASK1)
-#define FI(inst) ((inst)>>BITS*2 & MASK1)
-#define FA(inst)	\
-	(int)((inst)&SIGNB ?	\
-		-(int)((inst)>>BITS*3 & MASK2) :	\
-		((inst)>>BITS*3 & MASK2))
-#define RAVAL ra & SIGNB ? -(int)(ra&MASK5) : ra&MASK5
-#define RXVAL rx & SIGNB ? -(int)(rx&MASK5) : rx&MASK5
-#define RIVAL(i) r[(i)]&SIGNB ? -(int)(r[(i)]&MASK2) : r[(i)]&MASK2
-#define UNPACK(inst) \
-	int a, i, f, m, ival;	\
-	a = FA(inst);	\
-	i = FI(inst);	\
-	f = FF(inst);	\
-	ival = RIVAL(i);	\
-	m = M(a, ival);
 
 enum {
 	BITS = 6,

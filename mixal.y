@@ -163,7 +163,7 @@ aexp:
 			$$ = -((long)mval);
 		} else
 			$$ = mval;
-		print("aexp sym: %s, %ld\n", ($LSYMDEF)->name, $$);
+//		print("aexp sym: %s, %ld\n", ($LSYMDEF)->name, $$);
 	}
 |	'*'
 	{

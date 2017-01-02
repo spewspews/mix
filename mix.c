@@ -351,7 +351,7 @@ disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 
 	inst = cells[l];
 	print("%d\n", inst);
-	*sign = inst&SIGNB;
+	*sign = inst>>31;
 	opc = inst & MASK1;
 	inst >>= BITS;
 	*fpart = inst & MASK1;
@@ -371,11 +371,24 @@ mixvm(void)
 	dovm(vmstart);
 }
 
+int
+mval(u32int a, int shift, int mask)
+{
+	int sign, val;
+
+	sign = a >> 31;
+	val = a>>shift & mask;
+	if(sign)
+		return -val;
+	return val;
+}
+
 void
 query(void)
 {
 	char buf[512];
 	long l, r;
+	vlong rax;
 	int sign, apart, ipart, fpart, opc;
 
 	for(;;) {
@@ -389,61 +402,73 @@ query(void)
 		if(buf[0] == 'r') {
 			switch(buf[1]) {
 			case 'a':
-				print("%d\n", RAVAL);
+				if(buf[2] == 'x') {
+					rax = ra & MASK5;
+					rax <<= 5 * BITS;
+					rax |= rx & MASK5;
+					if(ra >> 31)
+						rax = -rax;
+					print("%lld\n", rax);
+				} else
+					print("%d\n", mval(ra, 0, MASK5));
 				break;
 			case 'x':
-				print("%d\n", RXVAL);
+				print("%d\n", mval(rx, 0, MASK5));
 				break;
 			}
 			continue;
 		}
-		l = strtol(buf, nil, 10);
-		opc = disasm(l, &sign, &apart, &ipart, &fpart);
-		print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
+		if(isdigit(r)) {
+			l = strtol(buf, nil, 10);
+			opc = disasm(l, &sign, &apart, &ipart, &fpart);
+			print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
+		}
 	}
 }
 
 int
-V(int c, int f)
+M(int a, int i)
+{
+	int off;
+
+	off = i == 0 ? 0 : mval(r[i], 0, MASK2);
+	return a + off;
+}
+
+int
+V(int aval, int ival, int fval)
 {
 	u32int word;
-	int sign, a, b, m;
+	int a, b, m;
 
-	UNF(a, b, f);
+	word = cells[M(aval, ival)];
 
-	if(a > 5 || b > 5)
-		error("Invalid fpart");
+	if(fval == 5)
+		return mval(word, 0, MASK5);
 
-	word = cells[c];
+	UNF(a, b, fval);
 
 	if(a == 0) {
-		sign = word&SIGNB;
-		a = 1;
-	} else
-		sign = 0;
+		word &= ~SIGNB;
+		a++;
+	}
 
 	m = b - a;
-	if(m < 0 || m > 4)
+	if(a > 5 || b > 5 || m < 0 || m > 4)
 		error("Invalid fpart");
 
-	word >>= ((5-b)*BITS);
-	word &= mask[m];
-	return sign ? -(int)word : word;
+	return mval(word, 5-b, mask[m]);
 }
 
 void mixfadd(int){}
 
 void
-mixadd(int inst)
+mixadd(int a, int i, int f)
 {
 	int rval;
-	UNPACK(inst);
-
-//	print("mixadd ra: %d\n", ra);
-	rval = RAVAL;
-//	print("mixadd raval: %d\n", rval);
-	rval += V(m, f);
-//	print("mixadd result: %d\n", rval);
+	
+	rval = mval(ra, 0, MASK5);
+	rval += V(a, i, f);
 	ra = rval < 0 ? -rval|SIGNB : rval;
 	if(ra & OVERB) {
 		ra &= ~OVERB;
@@ -454,13 +479,12 @@ mixadd(int inst)
 void mixfsub(int){}
 
 void
-mixsub(int inst)
+mixsub(int a, int i, int f)
 {
 	int rval;
-	UNPACK(inst);
 
-	rval = RAVAL;
-	rval += V(m, f);
+	rval = mval(ra, 0, MASK5);
+	rval -= V(a, i, f);
 	ra = rval < 0 ? -rval|SIGNB : rval;
 	if(ra & OVERB) {
 		ra &= ~OVERB;
@@ -471,67 +495,77 @@ mixsub(int inst)
 void mixfmul(int){}
 
 void
-mixmul(int inst)
+mixmul(int a, int i, int f)
 {
 	vlong rval;
-	u32int signb;
-	UNPACK(inst);
+	int sign;
 
-	rval = RAVAL;
-	rval *= V(m, f);
+	rval = mval(ra, 0, MASK5);
+
+	print("mixmul: ra %ud rval %lld\n", ra, rval);
+	rval *= V(a, i, f);
+
+	print("mixmul result: %lld\n", rval);
+	print("ra should be: %lld\n", rval >> 5*BITS);
+	print("rx should be: %lld\n", rval & MASK5);
 
 	if(rval < 0) {
 		rval = -rval;
-		signb = SIGNB;
+		sign = 1;
 	} else
-		signb = ~SIGNB;
+		sign = 0;
 
-	ra = rval>>5 & MASK5 & signb;
-	rx = rval & MASK5 & signb;
+	ra = rval>>5*BITS & MASK5;
+	rx = rval & MASK5;
+	if(sign) {
+		ra |= SIGNB;
+		rx |= SIGNB;
+	}
 }
 
 void mixfdiv(int){}
 
-void mixdiv(int inst)
+void mixdiv(int a, int i, int f)
 {
-	vlong divend;
-	u32int xsignb, signb;
-	int quot, rem, v;
+	vlong rax, quot;
+	u32int xsign, asign;
+	int rem, v;
 
-	UNPACK(inst);
-
-	v = V(m, f);
+	v = V(a, i, f);
 	if(v == 0) {
 		ot = 1;
 		return;
 	}
-	divend = ra & MASK5;
-	divend <<= BITS * 5;
-	divend |= rx & MASK5;
-	if(ra & SIGNB)
-		divend = -divend;
+	rax = ra & MASK5;
+	rax <<= 5 * BITS;
+	rax |= rx & MASK5;
+	if(ra >> 31)
+		rax = -rax;
 
-	quot = divend / v;
-	rem = divend % v;
+	quot = rax / v;
+	rem = rax % v;
 
 	if(quot < 0) {
 		quot = -quot;
-		signb = SIGNB;
+		asign = 1;
 	} else
-		signb = ~SIGNB;
+		asign = 0;
+
+	if(quot & MASK5)
+		ot = 1;
 
 	if(rem < 0) {
 		rem = -rem;
-		xsignb = SIGNB;
+		xsign = 1;
 	} else
-		xsignb = ~SIGNB;
+		xsign = 0;
 
-	ra = quot & signb;
-	rx = rem & xsignb;
-	if(ra & OVERB) {
-		ra &= ~OVERB;
-		ot = 1;
-	}
+	ra = quot & MASK5;
+	rx = rem & MASK5;
+	if(asign)
+		ra |= SIGNB;
+	if(xsign)
+		rx |= SIGNB;
 }
 
 void
@@ -583,7 +617,17 @@ void mixhalt(void)
 	query();
 }
 
-void mixsla(int){}
+void
+mixsla(int a, int i)
+{
+	int val;
+
+	val = ra&MASK5;
+	val >>= M(a, i) * BITS;
+	ra &= ~MASK5;
+	ra |= val;
+}
+
 void mixsra(int){}
 void mixslax(int){}
 void mixsrax(int){}
@@ -607,43 +651,47 @@ void mixout(int){}
 void
 dovm(int ip)
 {
-	int inst;
+	int a, i, f, c, inst;
 
 Top:
 	for (;;) {
 		inst = cells[ip];
-		switch(FC(inst)) {
+		a = mval(inst, 3, MASK2);
+		i = inst>>2*BITS & MASK1;
+		f = inst>>BITS & MASK1;
+		c = inst & MASK1;
+		switch(c) {
 		default:
 			fprint(2, "Bad op!\n");
 			exits("error");
 		case 0:
 			break;
 		case 1:
-			if(FF(inst) == 6)
+			if(f == 6)
 				mixfadd(inst);
 			else
-				mixadd(inst);
+				mixadd(a, i, f);
 			break;
 		case 2:
-			if(FF(inst) == 6)
+			if(f == 6)
 				mixfsub(inst);
 			else
-				mixsub(inst);
+				mixsub(a, i, f);
 			break;
 		case 3:
-			if(FF(inst) == 6)
+			if(f == 6)
 				mixfmul(inst);
 			else
-				mixmul(inst);
+				mixmul(a, i, f);
 			break;
 		case 4:
-			if(FF(inst) == 6)
+			if(f == 6)
 				mixfdiv(inst);
 			else
-				mixdiv(inst);
+				mixdiv(a, i, f);
 			break;
 		case 5:
-			switch(FF(inst)) {
+			switch(f) {
 			default:
 				error("Bad instruction");
 			case 0:
@@ -658,11 +706,11 @@ Top:
 			}
 			break;
 		case 6:
-			switch(FF(inst)) {
+			switch(f) {
 			default:
 				error("Bad instruction");
 			case 0:
-				mixsla(inst);
+				mixsla(a, i);
 				break;
 			case 1:
 				mixsra(inst);
