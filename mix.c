@@ -372,12 +372,12 @@ mixvm(void)
 }
 
 int
-mval(u32int a, int shift, int mask)
+mval(u32int a, int s, int m)
 {
 	int sign, val;
 
 	sign = a >> 31;
-	val = a>>shift*BITS & mask;
+	val = a>>s*BITS & m;
 	if(sign)
 		return -val;
 	return val;
@@ -438,7 +438,7 @@ M(int a, int i)
 {
 	int off;
 
-	off = i == 0 ? 0 : mval(ri[i], 0, MASK2);
+	off = i == 0 ? 0 : mval(ri[i], 3, MASK2);
 	return a + off;
 }
 
@@ -727,9 +727,9 @@ mixld(int m, int f, u32int *reg)
 {
 	int v;
 
-	print("mixld: m is %d\n", m);
+//	print("mixld: m is %d\n", m);
 	v = V(m, f);
-	print("loading %d with %d\n", mval(*reg, 0, MASK5), v);
+//	print("loading %d with %d\n", mval(*reg, 0, MASK5), v);
 	*reg = v < 0 ? -v|SIGNB : v;
 	print("now is %d\n", *reg);
 }
@@ -789,13 +789,13 @@ mixsti(int m, int f, u32int reg)
 	v = ri[reg] & mask[d];
 	v &= MASK2;
 	w &= ~(mask[d] << b-5);
-	cells[m] = w | v;
+	cells[m] = w | v<<b-5;
 }
 
 int
-mixjbus(int m)
+mixjbus(int /*m*/, int /*f*/, int ip)
 {
-	return m;
+	return ip+1;
 }
 
 void
@@ -842,6 +842,103 @@ mixout(int m, int f)
 	}
 }
 
+int
+mixjred(int m, int /*f*/, int /*ip*/)
+{
+	return m;
+}
+
+int
+mixjmp(int m, int ip)
+{
+	ri[0] = ip+1 & MASK2;
+	return m;
+}
+
+int
+mixjov(int m, int ip)
+{
+	if(ot) {
+		ot = 0;
+		ri[0] = ip+1 & MASK2;
+		return m;
+	}
+	return ip + 1;
+}
+
+int
+mixjnov(int m, int ip)
+{
+	if(ot) {
+		ot = 0;
+		return ip + 1;
+	}
+	ri[0] = ip+1 & MASK2;
+	return m;
+}
+
+int
+mixjc(int m, int ip, int c1, int c2)
+{
+	if(c1 || c2) {
+		ri[0] = ip+1 & MASK2;
+		return m;
+	}
+	return ip + 1;
+}
+
+int
+mixjaxic(int m, int ip, u32int r, int msk, int f)
+{
+	int v, c;
+
+	v = mval(r, 0, msk);
+	switch(f) {
+	default:	error("Bad instruction");
+	case 0:	c = v < 0;	break;
+	case 1:	c = v == 0;	break;
+	case 2:	c = v > 0;	break;
+	case 3:	c = v >= 0;	break;
+	case 4:	c = v != 0;	break;
+	case 5:	c = v <= 0;	break;
+	}
+
+	if(c) {
+		ri[0] = ip+1 & MASK2;
+		return m;
+	}
+	return ip + 1;
+}
+
+void
+mixinc(int m, u32int *r)
+{
+	int v;
+
+	v = mval(*r, 0, MASK5);
+	v += m;
+	*r = v < 0 ? -v|SIGNB : v;
+}
+
+void mixfcmp(void){}
+
+void
+mixcmp(int m, int f, u32int r)
+{
+	int v1, v2;
+
+	ce = cg = cl = 0;
+
+	v1 = V(r, f);
+	v2 = V(m, f);
+	if(v1 < v2)
+		cl = 1;
+	else if(v1 > v2)
+		cg = 1;
+	else
+		ce = 1;
+}
+
 void
 dovm(int ip)
 {
@@ -849,15 +946,17 @@ dovm(int ip)
 
 Top:
 	for (;;) {
-		print("dovm: ip is %d\n", ip);
+//		print("dovm: ip is %d\n", ip);
+		if(ip < 0 || ip > 4000)
+			error("Bad memory access %d\n", ip);
 		inst = cells[ip];
-		print("dovm: inst is %ud\n", inst);
+//		print("dovm: inst is %ud\n", inst);
 		a = mval(inst, 3, MASK2);
 		i = inst>>2*BITS & MASK1;
 		f = inst>>BITS & MASK1;
 		c = inst & MASK1;
 		m = M(a, i);
-		print("dovm: a is %d; i is %d; m is %d\n", a, i, m);
+//		print("dovm: a is %d; i is %d; m is %d\n", a, i, m);
 		switch(c) {
 		default:
 			fprint(2, "Bad op!\n");
@@ -905,26 +1004,13 @@ Top:
 			break;
 		case 6:
 			switch(f) {
-			default:
-				error("Bad instruction");
-			case 0:
-				mixslra(m, 1);
-				break;
-			case 1:
-				mixslra(m, 0);
-				break;
-			case 2:
-				mixslrax(m, 1);
-				break;
-			case 4:
-				mixslrax(m, 0);
-				break;
-			case 5:
-				mixslc(m);
-				break;
-			case 6:
-				mixsrc(m);
-				break;
+			default: error("Bad instruction");
+			case 0: mixslra(m, 1);	break;
+			case 1: mixslra(m, 0);	break;
+			case 2: mixslrax(m, 1);	break;
+			case 4: mixslrax(m, 0);	break;
+			case 5: mixslc(m);	break;
+			case 6: mixsrc(m);	break;
 			}
 			break;
 		case 7:
@@ -961,16 +1047,88 @@ Top:
 			mixst(m, f, rx);
 			break;
 		case 32:
-			ip = mixjbus(inst);
-			goto Top;
+			mixsti(m, f, ri[0]);
+			break;
 		case 33:
-			mixioc(m, f);
+			cells[m] = 0; /* STZ */
 			break;
 		case 34:
+			ip = mixjbus(m, f, ip);
+			goto Top;
+		case 35:
+			mixioc(m, f);
+			break;
+		case 36:
 			mixin(m, f);
 			break;
-		case 35:
+		case 37:
 			mixout(m, f);
+			break;
+		case 38:
+			ip = mixjred(m, f, ip);
+			break;
+		case 39:
+			switch(f) {
+			default: error("Bad instruction");
+			case 0: ip = mixjmp(m, ip);	break;
+			case 1: ip = m;	break;
+			case 2: ip = mixjov(m, ip);	break;
+			case 3: ip = mixjnov(m, ip);	break;
+			case 4: ip = mixjc(m, ip, cl, 0);	break;
+			case 5: ip = mixjc(m, ip, ce, 0);	break;
+			case 6: ip = mixjc(m, ip, cg, 0);	break;
+			case 7: ip = mixjc(m, ip, cg, ce);	break;
+			case 8: ip = mixjc(m, ip, cl, cg);	break;
+			case 9: ip = mixjc(m, ip, cl, ce);	break;
+			}
+			goto Top;
+		case 40:
+			ip = mixjaxic(m, ip, ra, MASK5, f);
+			goto Top;
+		case 41: case 42: case 43:
+		case 44: case 45: case 46:
+			ip = mixjaxic(m, ip, ri[c-40], MASK2, f);
+			goto Top;
+		case 47:
+			ip = mixjaxic(m, ip, rx, MASK5, f);
+			goto Top;
+		case 48:
+			switch(f) {
+			case 0:	mixinc(m, &ra);	break;
+			case 1: mixinc(-m, &ra);	break;
+			case 2:	ra = m < 0 ? -m|SIGNB : m;	break;
+			case 3:	ra = m > 0 ? m|SIGNB : -m;	break;
+			}
+			break;
+		case 49: case 50: case 51:
+		case 52: case 53: case 54:
+			switch(f) {
+			case 0:	mixinc(m, ri+(c-48));	break;
+			case 1:	mixinc(-m, ri+(c-48));	break;
+			case 2:	ri[c-48] = m < 0 ? -m|SIGNB : m;	break;
+			case 3:	ri[c-48] = m > 0 ? m|SIGNB : -m;	break;
+			}
+			break;
+		case 55:
+			switch(f) {
+			case 0:	mixinc(m, &rx);	break;
+			case 1: mixinc(-m, &rx);	break;
+			case 2:	rx = m < 0 ? -m|SIGNB : m;	break;
+			case 3:	rx = m > 0 ? m|SIGNB : -m;	break;
+			}
+			break;
+		case 56:
+			if(f == 6)
+				mixfcmp();
+			else
+				mixcmp(m, f, ra);
+			break;
+		case 57: case 58: case 59:
+		case 60: case 61: case 62:
+			mixcmp(m, f, ri[c-56] & ~(MASK3<<2));
+			break;
+		case 63:
+			mixcmp(m, f, rx);
 			break;
 		}
 		ip++;
