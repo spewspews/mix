@@ -464,19 +464,16 @@ M(int a, int i)
 }
 
 int
-V(int m, int f)
+V(u32int w, int f)
 {
-	u32int word;
 	int a, b, d;
 
 	if(f == 0)
 		return 0;
 
-	word = cells[m];
-
 	UNF(a, b, f);
 	if(a > 0)
-		word &= ~SIGNB;
+		w &= ~SIGNB;
 	else
 		a++;
 
@@ -484,7 +481,7 @@ V(int m, int f)
 	if(a > 5 || b > 5 || d < 0 || d > 4)
 		error("Invalid fpart");
 
-	return mval(word, 5-b, mask[d]);
+	return mval(w, 5-b, mask[d]);
 }
 
 void mixfadd(int){}
@@ -495,8 +492,7 @@ mixadd(int m, int f)
 	int rval;
 	
 	rval = mval(ra, 0, MASK5);
-	print("mixadd ra is %d, adding %d, m is %d\n", rval, V(m, f), m);
-	rval += V(m, f);
+	rval += V(cells[m], f);
 	ra = rval < 0 ? -rval|SIGNB : rval;
 	if(ra & OVERB) {
 		ra &= ~OVERB;
@@ -512,7 +508,7 @@ mixsub(int m, int f)
 	int rval;
 
 	rval = mval(ra, 0, MASK5);
-	rval -= V(m, f);
+	rval -= V(cells[m], f);
 	ra = rval < 0 ? -rval|SIGNB : rval;
 	if(ra & OVERB) {
 		ra &= ~OVERB;
@@ -529,7 +525,7 @@ mixmul(int m, int f)
 	int signb;
 
 	rval = mval(ra, 0, MASK5);
-	rval *= V(m, f);
+	rval *= V(cells[m], f);
 
 	if(rval < 0) {
 		rval = -rval;
@@ -549,7 +545,7 @@ void mixdiv(int m, int f)
 	u32int xsignb, asignb;
 	int rem, v;
 
-	v = V(m, f);
+	v = V(cells[m], f);
 	if(v == 0) {
 		ot = 1;
 		return;
@@ -744,7 +740,7 @@ mixld(int m, int f, u32int *reg)
 	int v;
 
 //	print("mixld: m is %d\n", m);
-	v = V(m, f);
+	v = V(cells[m], f);
 //	print("loading %d with %d\n", mval(*reg, 0, MASK5), v);
 	*reg = v < 0 ? -v|SIGNB : v;
 //	print("now is %d\n", *reg);
@@ -755,7 +751,7 @@ mixldn(int m, int f, u32int *reg)
 {
 	int v;
 
-	v = -V(m, f);
+	v = -V(cells[m], f);
 	*reg = v < 0 ? -v|SIGNB : v;
 }
 
@@ -929,7 +925,7 @@ mixcmp(int m, int f, u32int r)
 	ce = cg = cl = 0;
 
 	v1 = V(r, f);
-	v2 = V(m, f);
+	v2 = V(cells[m], f);
 	if(v1 < v2)
 		cl = 1;
 	else if(v1 > v2)
@@ -950,10 +946,10 @@ Top:
 			error("Bad memory access %d\n", ip);
 		inst = cells[ip];
 //		print("dovm: inst is %ud\n", inst);
-		a = mval(inst, 3, MASK2);
-		i = inst>>2*BITS & MASK1;
-		f = inst>>BITS & MASK1;
-		c = inst & MASK1;
+		a = V(inst, F(0, 2));
+		i = V(inst, F(3, 3));
+		f = V(inst, F(4, 4));
+		c = V(inst, F(5, 5));
 		m = M(a, i);
 //		print("dovm: a is %d; i is %d; m is %d\n", a, i, m);
 		switch(c) {
