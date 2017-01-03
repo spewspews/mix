@@ -17,6 +17,7 @@ error(char *s, ...)
 	va_end(a);
 	*bp++ = '\n';
 	write(2, buf, bp - buf);
+	mixquery();
 	exits("error");
 }
 

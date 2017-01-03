@@ -391,7 +391,7 @@ disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 }
 
 int
-mval(u32int a, int s, int m)
+mval(u32int a, int s, u32int m)
 {
 	int sign, val;
 
@@ -761,39 +761,16 @@ mixldn(int m, int f, u32int *reg)
 }
 
 void
-mixst(int m, int f, u32int reg)
+mixst(int m, int f, u32int reg, u32int msk)
 {
 	u32int w, v;
 	int a, b, d;
 
-	w = cells[m];
 	UNF(a, b, f);
-	if(a == 0) {
-		if(ra >> 31)
-			w |= SIGNB;
-		else
-			w &= ~SIGNB;
-		a++;
-	}
-
-	d = b - a;
-	if(a > 5 || b > 5 || m < 0 || m > 4)
-		error("Bad fpart");
-	v = reg & mask[d];
-	w &= ~(mask[d] << b-5);
-	cells[m] = w | v;
-}
-
-void
-mixsti(int m, int f, u32int reg)
-{
-	u32int w, v;
-	int a, b, d;
 
 	w = cells[m];
-	UNF(a, b, f);
 	if(a == 0) {
-		if(ra >> 31)
+		if(reg >> 31)
 			w |= SIGNB;
 		else
 			w &= ~SIGNB;
@@ -803,10 +780,10 @@ mixsti(int m, int f, u32int reg)
 	d = b - a;
 	if(a > 5 || b > 5 || d < 0 || d > 4)
 		error("Bad fpart");
-	v = ri[reg] & mask[d];
-	v &= MASK2;
-	w &= ~(mask[d] << b-5);
-	cells[m] = w | v<<b-5;
+
+	v = reg & msk & mask[d];
+	w &= ~(mask[d] << (5-b)*BITS);
+	cells[m] = w | v<<(5-b)*BITS;
 }
 
 int
@@ -868,6 +845,7 @@ mixjred(int m, int /*f*/, int /*ip*/)
 int
 mixjmp(int m, int ip)
 {
+//	print("mixjmp: m %d, ip %d\n", m, ip);
 	ri[0] = ip+1 & MASK2;
 	return m;
 }
@@ -905,7 +883,7 @@ mixjc(int m, int ip, int c1, int c2)
 }
 
 int
-mixjaxic(int m, int ip, u32int r, int msk, int f)
+mixjaxic(int m, int ip, u32int r, u32int msk, int f)
 {
 	int v, c;
 
@@ -1053,17 +1031,17 @@ Top:
 			mixldn(m, f, &rx);
 			break;
 		case 24:
-			mixst(m, f, ra);
+			mixst(m, f, ra, MASK5);
 			break;
 		case 25: case 26: case 27:
 		case 28: case 29: case 30:
-			mixsti(m, f, ri[c-24]);
+			mixst(m, f, ri[c-24], MASK2);
 			break;
 		case 31:
-			mixst(m, f, rx);
+			mixst(m, f, rx, MASK5);
 			break;
 		case 32:
-			mixsti(m, f, ri[0]);
+			mixst(m, f, ri[0], MASK2);
 			break;
 		case 33:
 			cells[m] = 0; /* STZ */
