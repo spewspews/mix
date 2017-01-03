@@ -325,40 +325,16 @@ endprog(int start)
 }
 
 u32int
-wval(u32int old, int exp, int fpart)
+wval(u32int old, int exp, int f)
 {
-	int a, b, val, m, sign;
-
-	if(fpart == -1) {
+	if(f == -1) {
 		if(exp < 0)
 			return -exp | SIGNB;
 		else
 			return exp;
 	}
 
-	UNF(a, b, fpart);
-
-	if(a > 5 || b > 5)
-		error("Invalid fpart");
-
-	if(exp < 0) {
-		sign = 1;
-		exp = -exp;
-	} else
-		sign = 0;
-
-	if(a == 0) {
-		old = sign ? old|SIGNB : old&~SIGNB;
-		if(b == 0)
-			return old;
-		a = 1;
-	}
-
-	m = b - a;
-	if(m < 0 || m > 4)
-		error("Invalid fpart");
-	val = exp & mask[m];
-	val <<= (5-b) * BITS;
-	old &= ~(mask[m] << (5-b)*BITS);
-	return old | val;
+	if(exp < 0)
+		return fset(old, -exp & MASK5, f, 1);
+	return fset(old, exp&MASK5, f, 0);
 }

@@ -469,17 +469,16 @@ V(int m, int f)
 	u32int word;
 	int a, b, d;
 
+	if(f == 0)
+		return 0;
+
 	word = cells[m];
 
-	if(f == 5)
-		return mval(word, 0, MASK5);
-
 	UNF(a, b, f);
-
-	if(a == 0) {
+	if(a > 0)
 		word &= ~SIGNB;
+	else
 		a++;
-	}
 
 	d = b - a;
 	if(a > 5 || b > 5 || d < 0 || d > 4)
@@ -760,30 +759,35 @@ mixldn(int m, int f, u32int *reg)
 	*reg = v < 0 ? -v|SIGNB : v;
 }
 
-void
-mixst(int m, int f, u32int reg, u32int msk)
+u32int
+fset(u32int w, u32int v, int f, int sign)
 {
-	u32int w, v;
 	int a, b, d;
 
-	UNF(a, b, f);
+	if(f == 5)
+		return v;
 
-	w = cells[m];
+	UNF(a, b, f);
 	if(a == 0) {
-		if(reg >> 31)
-			w |= SIGNB;
-		else
-			w &= ~SIGNB;
+		w = sign ? w|SIGNB : w&~SIGNB;
+		if(b == 0)
+			return w;
 		a++;
 	}
 
 	d = b - a;
 	if(a > 5 || b > 5 || d < 0 || d > 4)
 		error("Bad fpart");
-
-	v = reg & msk & mask[d];
+	v &= mask[d];
+	v <<= (5-b) * BITS;
 	w &= ~(mask[d] << (5-b)*BITS);
-	cells[m] = w | v<<(5-b)*BITS;
+	return w | v;
+}
+
+void
+mixst(int m, int f, u32int reg, u32int msk)
+{
+	cells[m] = fset(cells[m], reg&msk, f, reg>>31);
 }
 
 int

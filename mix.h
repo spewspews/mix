@@ -27,6 +27,7 @@ struct Con {
 
 void mixvm(int);
 void mixquery(void);
+u32int fset(u32int, u32int, int, int);
 
 long yylex(void);
 int yyparse(void);
