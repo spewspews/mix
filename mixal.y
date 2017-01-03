@@ -17,6 +17,7 @@
 %type	<sym>	loc reflit
 
 %token	<sym>	LSYMDEF LSYMREF LOP LEQU LORIG LCON LALF LEND
+%token	<sym>	LBACK LHERE LFORW
 %token	<lval>	LNUM
 /* %token	<r>	LCHAR */
 
@@ -81,12 +82,17 @@ loc:
 	{
 		$$ = $LSYMREF;
 	}
+|	LHERE
 
 apart:
 	{
 		$$ = 0;
 	}
 |	exp
+|	LBACK
+	{
+		$$ = 0;
+	}
 
 reflit:
 	LSYMREF
@@ -94,6 +100,7 @@ reflit:
 	{
 		$$ = con($wval1);
 	}
+|	LFORW
 
 ipart:
 	{

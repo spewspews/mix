@@ -9,7 +9,7 @@ struct Sym {
 	long lex;
 	union {
 		struct {
-			int opc, f;	/* LOP */
+			int opc, f;	/* LOP LHERE LBACK LFORW */
 		};
 		u32int mval;	/* LSYMDEF */
 		struct {
