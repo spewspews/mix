@@ -9,7 +9,8 @@
 	Sym *sym;
 	long lval;
 	u32int mval;
-/*	Rune r; */
+	Rune r;
+	Rune *rbuf;
 }
 
 %type	<lval>	wval apart exp aexp fpart ipart
@@ -19,7 +20,7 @@
 %token	<sym>	LSYMDEF LSYMREF LOP LEQU LORIG LCON LALF LEND
 %token	<sym>	LBACK LHERE LFORW
 %token	<lval>	LNUM
-/* %token	<r>	LCHAR */
+%token	<rbuf>	LSTR
 
 %left '+' '-' '*' '/' LSS ':' ','
 
@@ -62,6 +63,11 @@ inst:
 		defloc($loc, star);
 		cells[star++] = $wval1;
 	}
+|	loc LALF ws LSTR eol
+	{
+		defloc($loc, star);
+		alf(star++, $LSTR);
+	}
 
 end:
 	loc LEND ws wval eol
@@ -82,7 +88,20 @@ loc:
 	{
 		$$ = $LSYMREF;
 	}
-|	LHERE
+|	LHERE ws
+	{
+		Sym *f;
+		int l;
+
+		l = ($LHERE)->opc;
+		back[l] = star;
+		f = forw + l;
+		defloc(f, star);
+		f->lex = LSYMREF;
+		f->refs = nil;
+		f->i = f->max = 0;
+		$$ = nil;
+	}
 
 apart:
 	{
@@ -91,7 +110,7 @@ apart:
 |	exp
 |	LBACK
 	{
-		$$ = 0;
+		$$ = back[($LBACK)->opc];
 	}
 
 reflit:
@@ -101,6 +120,9 @@ reflit:
 		$$ = con($wval1);
 	}
 |	LFORW
+	{
+		$$ = forw + ($LFORW)->opc;
+	}
 
 ipart:
 	{
@@ -206,6 +228,9 @@ ws:
 
 %%
 
+int back[10];
+Sym forw[10];
+
 void
 defrefs(Sym *sym, long apart)
 {
@@ -233,7 +258,7 @@ defloc(Sym *sym, long val)
 {
 	if(sym == nil)
 		return;
-//	print("defloc %s %d\n", sym->name, val);
+//	print("defloc %s %ld\n", sym->name, val);
 	defrefs(sym, val);
 //	print("defloc freeing %p\n", sym->refs);
 	free(sym->refs);
@@ -313,6 +338,25 @@ con(u32int exp)
 }
 
 void
+alf(int loc, Rune *b)
+{
+	u32int w;
+	int m;
+	Rune *r, *e;
+
+	w = 0;
+	e = b + 5;
+	for(r = b; r < e; r++) {
+		if((m = runetomix(*r)) == -1)
+			error("Bad mixchar %C\n", *r);
+		w |= m;
+		if(r+1 < e)
+			w <<= BITS;
+	}
+	cells[loc] = w;
+}
+
+void
 endprog(int start)
 {
 	Con *c;
@@ -336,5 +380,5 @@ wval(u32int old, int exp, int f)
 
 	if(exp < 0)
 		return fset(old, -exp & MASK5, f, 1);
-	return fset(old, exp&MASK5, f, 0);
+	return fset(old, exp & MASK5, f, 0);
 }

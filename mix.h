@@ -46,12 +46,9 @@ void *emalloc(ulong);
 void *emallocz(ulong);
 void *erealloc(void*, ulong);
 
-int star;
+int star, line, vmstart, yydone, yylit;
 Con *cons;
 char *filename;
-int line;
-int vmstart;
-int yydone;
 extern int mask[5];
 u32int cells[4000];
 

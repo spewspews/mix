@@ -253,7 +253,9 @@ yylex(void)
 
 	if(yydone)
 		return -1;
+
 	r = Bgetrune(&bin);
+//	print("yylex start %C\n", r);
 	switch(r) {
 	case Beof:
 		return -1;
@@ -278,6 +280,15 @@ yylex(void)
 		else
 			Bungetrune(&bin);
 		return '/';
+	case '"':
+		for(bp = buf; bp < buf+5; bp++) {
+			*bp = Bgetrune(&bin);
+		}
+		if(Bgetrune(&bin) != '"')
+			error("Bad string literal\n");
+		yylval.rbuf = buf;
+//		print("yylex returning string\n");
+		return LSTR;
 	case '#':
 		skipto('\n');
 		return '\n';
@@ -403,12 +414,21 @@ mval(u32int a, int s, u32int m)
 }
 
 void
+prinst(int l)
+{
+	int sign, apart, ipart, fpart, opc;
+
+	opc = disasm(l, &sign, &apart, &ipart, &fpart);
+	print("%d\n", mval(cells[l], 0, MASK5));
+	print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
+}
+
+void
 mixquery(void)
 {
 	char buf[512];
 	long l, r;
 	vlong rax;
-	int sign, apart, ipart, fpart, opc;
 
 	for(;;) {
 		print("μ ");
@@ -446,9 +466,7 @@ mixquery(void)
 		}
 		if(isdigit(buf[0])) {
 			l = strtol(buf, nil, 10);
-			opc = disasm(l, &sign, &apart, &ipart, &fpart);
-			print("%d\n", mval(cells[l], 0, MASK5));
-			print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
+			prinst(l);
 		}
 	}
 }
@@ -533,13 +551,14 @@ mixmul(int m, int f)
 	} else
 		signb = 0;
 
-	ra = rval>>5*BITS & MASK5 & signb;
-	rx = rval & MASK5 & signb;
+	ra = rval>>5*BITS & MASK5 | signb;
+	rx = rval & MASK5 | signb;
 }
 
 void mixfdiv(int){}
 
-void mixdiv(int m, int f)
+void
+mixdiv(int m, int f)
 {
 	vlong rax, quot;
 	u32int xsignb, asignb;
@@ -556,9 +575,12 @@ void mixdiv(int m, int f)
 	if(ra >> 31)
 		rax = -rax;
 
+//	print("mixdiv dividend: %lld\n", rax);
+//	print("mixdiv divisor: %d\n", v);
 	quot = rax / v;
 	rem = rax % v;
 
+//	print("mixdiv quot rem: %lld %d\n", quot, rem);
 	if(quot < 0) {
 		quot = -quot;
 		asignb = SIGNB;
@@ -574,8 +596,9 @@ void mixdiv(int m, int f)
 	if(quot & ~MASK5)
 		ot = 1;
 
-	ra = quot & MASK5 & asignb;
-	rx = rem & MASK5 & xsignb;
+	ra = quot & MASK5 | asignb;
+	rx = rem & MASK5 | xsignb;
+//	print("mixdiv ra, rx after: %d %d\n", mval(ra, 0, MASK5), mval(rx, 0, MASK5));
 }
 
 void
@@ -605,21 +628,25 @@ mixchar(void)
 	int i;
 	u32int a, val;
 
+//	print("mixchar: ra starts as %d\n", ra);
 	val = ra;
 	for(i = 0; i < 5; i++) {
 		a = val % 10;
 		a += 30;
-		rx &= ~(MASK1<<i);
-		rx |= a<<i;
+//		print("mixchar: rx digit is %d\n", a);
+		rx &= ~(MASK1 << i*BITS);
+		rx |= a << i*BITS;
 		val /= 10;
 	}
 	for(i = 0; i < 5; i++) {
 		a = val % 10;
 		a += 30;
-		ra &= ~(MASK1<<i);
-		ra |= a<<i;
+//		print("mixchar: ra digit is %d\n", a);
+		ra &= ~(MASK1 << i*BITS);
+		ra |= a << i*BITS;
 		val /= 10;
 	}
+//	print("mixchar: ra rx %d %d\n", ra, rx);
 }
 
 void
@@ -819,8 +846,9 @@ mixprint(int m, int words)
 		for(i = 4; i > -1; i--)
 			*rp++ = mixtorune(w>>i*BITS & MASK1);
 		*rp = '\0';
-		print("%S\n", buf);
+		print("%S", buf);
 	}
+	print("\n");
 }
 
 void
@@ -942,6 +970,7 @@ mixvm(int ip)
 Top:
 	for (;;) {
 //		print("dovm: ip is %d\n", ip);
+//		prinst(ip);
 		if(ip < 0 || ip > 4000)
 			error("Bad memory access %d\n", ip);
 		inst = cells[ip];
