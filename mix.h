@@ -21,11 +21,12 @@ struct Sym {
 
 struct Con {
 	Sym *sym;
-	int exp;
+	u32int exp;
 	Con *link;
 };
 
-void mixvm(void);
+void mixvm(int);
+void mixquery(void);
 
 long yylex(void);
 int yyparse(void);

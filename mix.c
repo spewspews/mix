@@ -196,7 +196,8 @@ main(int argc, char **argv)
 		fprint(2, "Parsing failed\n");
 		exits("Parsing");
 	}
-	mixvm();
+	mixvm(vmstart);
+	mixquery();
 }
 
 void
@@ -350,7 +351,6 @@ disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 	int inst, opc;
 
 	inst = cells[l];
-	print("%d\n", inst);
 	*sign = inst>>31;
 	opc = inst & MASK1;
 	inst >>= BITS;
@@ -361,14 +361,6 @@ disasm(int l, int *sign, int *apart, int *ipart, int *fpart)
 	*apart = inst & MASK2;
 
 	return opc;
-}
-
-void dovm(int);
-
-void
-mixvm(void)
-{
-	dovm(vmstart);
 }
 
 int
@@ -384,7 +376,7 @@ mval(u32int a, int s, int m)
 }
 
 void
-query(void)
+mixquery(void)
 {
 	char buf[512];
 	long l, r;
@@ -428,6 +420,7 @@ query(void)
 		if(isdigit(buf[0])) {
 			l = strtol(buf, nil, 10);
 			opc = disasm(l, &sign, &apart, &ipart, &fpart);
+			print("%d\n", mval(cells[l], 0, MASK5));
 			print("%d\t%d,%d(%d)\n", opc, apart, ipart, fpart);
 		}
 	}
@@ -436,9 +429,10 @@ query(void)
 int
 M(int a, int i)
 {
-	int off;
+	int off, r;
 
-	off = i == 0 ? 0 : mval(ri[i], 3, MASK2);
+	r = ri[i] & ~(MASK3<<2*BITS);
+	off = i == 0 ? 0 : mval(r, 0, MASK2);
 	return a + off;
 }
 
@@ -475,6 +469,7 @@ mixadd(int m, int f)
 	int rval;
 	
 	rval = mval(ra, 0, MASK5);
+	print("mixadd ra is %d, adding %d, m is %d\n", rval, V(m, f), m);
 	rval += V(m, f);
 	ra = rval < 0 ? -rval|SIGNB : rval;
 	if(ra & OVERB) {
@@ -605,11 +600,6 @@ mixchar(void)
 	}
 }
 
-void mixhalt(void)
-{
-	query();
-}
-
 void
 mixslra(int m, int left)
 {
@@ -731,7 +721,7 @@ mixld(int m, int f, u32int *reg)
 	v = V(m, f);
 //	print("loading %d with %d\n", mval(*reg, 0, MASK5), v);
 	*reg = v < 0 ? -v|SIGNB : v;
-	print("now is %d\n", *reg);
+//	print("now is %d\n", *reg);
 }
 
 void
@@ -940,7 +930,7 @@ mixcmp(int m, int f, u32int r)
 }
 
 void
-dovm(int ip)
+mixvm(int ip)
 {
 	int a, i, f, c, m, inst;
 
@@ -998,8 +988,7 @@ Top:
 				mixchar();
 				break;
 			case 2:
-				mixhalt();
-				break;
+				return;	/* HLT */
 			}
 			break;
 		case 6:
@@ -1125,7 +1114,7 @@ Top:
 			break;
 		case 57: case 58: case 59:
 		case 60: case 61: case 62:
-			mixcmp(m, f, ri[c-56] & ~(MASK3<<2));
+			mixcmp(m, f, ri[c-56] & ~(MASK3<<2*BITS));
 			break;
 		case 63:
 			mixcmp(m, f, rx);

@@ -90,9 +90,9 @@ apart:
 
 reflit:
 	LSYMREF
-|	'=' wval '='
+|	'=' wval1 '='
 	{
-		$$ = con($wval);
+		$$ = con($wval1);
 	}
 
 ipart:
@@ -290,7 +290,7 @@ refasm(Sym *op, long ipart, long fpart)
 }
 
 Sym*
-con(int exp)
+con(u32int exp)
 {
 	Con *c;
 	static int i;
