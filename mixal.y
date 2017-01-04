@@ -136,7 +136,7 @@ fpart:
 |	'(' exp ')'
 	{
 		if($exp < 0)
-			error("invalid fpart %d\n", $exp);
+			yyerror("invalid fpart %d\n", $exp);
 		$$ = $exp;
 	}
 
@@ -344,7 +344,7 @@ alf(int loc, Rune *b)
 	e = b + 5;
 	for(r = b; r < e; r++) {
 		if((m = runetomix(*r)) == -1)
-			error("Bad mixchar %C\n", *r);
+			yyerror("Bad mixchar %C\n", *r);
 		w |= m;
 		if(r+1 < e)
 			w <<= BITS;

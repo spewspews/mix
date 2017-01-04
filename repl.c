@@ -10,39 +10,35 @@ getf(char *line)
 {
 	long a, b;
 
-//	print("getf: %s\n", line);
 	if(*line == '\0')
 		return 5;
-	if(*line != '(') 
+	if(*line++ != '(') 
 		return -1;
-	a = strtol(line+1, &line, 10);
-	if(*line != ':')
+	a = strtol(line, &line, 10);
+	if(*line++ != ':')
 		return -1;
-	b = strtol(line+1, &line, 10);
+	b = strtol(line, &line, 10);
 	if(*line != ')')
 		return -1;
 	return F(a, b);
 }	
 
-void
+int
 disp(char *line)
 {
 	int f;
 	long m;
 
 	if(setjmp(errjmp) == 1)
-		goto Err;
+		return -1;
 	m = strtol(line, &line, 10);
 	if((f = getf(line)) == -1)
-		goto Err;
+		return -1;
 	print("%d\n", V(cells[m], f));
-	return;
-
-Err:
-	print("?\n");
+	return 0;
 }
 
-void
+int
 dispreg(char *line)
 {
 	vlong rax;
@@ -51,7 +47,7 @@ dispreg(char *line)
 	u32int reg;
 
 	if(setjmp(errjmp) == 1)
-		goto Err;
+		return -1;
 
 	switch(c = *line++) {
 	case 'a':
@@ -62,7 +58,7 @@ dispreg(char *line)
 			if(ra >> 31)
 				rax = -rax;
 			print("%lld\n", rax);
-			return;
+			return 0;
 		} else
 			reg = ra;
 		break;
@@ -74,56 +70,52 @@ dispreg(char *line)
 		break;
 	default:
 		if(!isdigit(c))
-			goto Err;
+			return -1;
 		i = c - '0';
 		if(i < 1 || i > 6)
-			goto Err;
+			return -1;
 		reg = ri[i];
 	}
 
 	if((f = getf(line)) == -1)
-		goto Err;
+		return -1;
 
 	print("%d\n", V(reg, f));
-	return;
-
-Err:
-	print("?\n");
+	return 0;
 }
 
-void
+int
 breakp(char *line)
 {
 	long l;
 
-	if(!isdigit(*line)) {
-		goto Err;
-	}
-	l = strtol(line, nil, 10);
+	if(!isdigit(*line))
+		return -1;
+	l = strtol(strskip(line), nil, 10);
 	if(l < 0 || l > 4000)
-		goto Err;
+		return -1;
 	bp[l] ^= 1;
-	return;
-
-Err:
-	print("?\n");
-	return;
+	return 0;
 }
 
-void
+int
 asm(char *l)
 {
 	if(yydone) {
 		print("Assembly complete\n");
-		return;
+		return 0;
 	}
-	l = skip(l, ' ');
+//	print("asm: %s\n", l);
+	l = strskip(l);
+//	print("asm: %s\n", l);
 	if(*l++ == '<') {
 		Bterm(&bin);
-		if(asmfile(skip(l, ' ')) == -1)
-			goto Err;
+		l = strskip(l);
+//		print("asm: %s\n", l);
+		if(asmfile(strim(l)) == -1)
+			return -1;
 		Binit(&bin, 0, OREAD);
-		return;
+		return 0;
 	}
 
 	line = 1;
@@ -132,24 +124,23 @@ asm(char *l)
 		yyparse();
 	Bterm(&bin);
 	Binit(&bin, 0, OREAD);
-	return;
-
-Err:
-	print("?\n");
+	return 0;
 }
 
-void
+int
 disasm(char *line)
 {
 	long l;
 
-	if(!isdigit(*line)) {
-		print("?\n");
-		return;
-	}
+	line = strskip(line);
+	if(!isdigit(*line))
+		return -1;
 
 	l = strtol(line, nil, 10);
-	prinst(l);
+	if(l < 0 || l > 4000)
+		return -1;
+	print("%I\n", cells[l]);
+	return 0;
 }
 
 void
@@ -171,18 +162,29 @@ mixprint(int m, int words)
 	print("\n");
 }
 
-void
+int
 out(char *line)
 {
-	long l;
+	long l, i;
 
-	if(!isdigit(*line)) {
-		print("?\n");
-		return;
+	line = strskip(line);
+	i = 1;
+	if(*line == '(') {
+		l = strtol(strskip(line+1), &line, 10);
+		line = strskip(line);
+		if(*line != ',')
+			return -1;
+		i = strtol(strskip(line+1), &line, 10);
+		line = strskip(line);
+		if(*line != ')')
+			return -1;
+	} else {
+		if(!isdigit(*line))
+			return -1;
+		l = strtol(line, nil, 10);
 	}
-
-	l = strtol(line, nil, 10);
-	mixprint(l, 1);
+	mixprint(l, i);
+	return 0;
 }
 
 void
@@ -206,39 +208,48 @@ repl(void)
 
 		once = 0;
 		switch(c = line[0]) {
+		Err:
+			print("?\n");
+			break;
 		default:
-			if(isdigit(c))
-				disp(line);
+			if(!isdigit(c)) 
+				goto Err;
+			if(disp(line) == -1)
+				goto Err;
 			break;
 		case 'r':
-			dispreg(line+1);
+			if(dispreg(line+1) == -1)
+				goto Err;
 			break;
 		case 'b':
-			breakp(line+1);
+			if(breakp(line+1) == -1)
+				goto Err;
 			break;
 		case 'a':
-			asm(line+1);
+			if(asm(line+1) == -1)
+				goto Err;
 			break;
 		case 'd':
-			disasm(line+1);
+			if(disasm(line+1) == -1)
+				goto Err;
 			break;
 		case 'o':
-			out(line+1);
+			if(out(line+1) == -1)
+				goto Err;
 			break;
 		case 's':
 			once = 1;
 		case 'g':
-			if(vmstart == -1) {
-				print("?\n");
+			if(vmstart == -1)
+				goto Err;
+			if(setjmp(errjmp) == 0)
+				vmstart = mixvm(vmstart, once);
+			else
 				break;
-			}
-			vmstart = mixvm(vmstart, once);
 			if(vmstart == -1)
 				print("halted\n");
-			else {
-				print("at %d:\t", vmstart);
-				prinst(vmstart);
-			}
+			else
+				print("at %d:\t%I\n", vmstart, cells[vmstart]);
 			break;
 		case 'x':
 			return;

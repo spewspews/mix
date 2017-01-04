@@ -217,7 +217,7 @@ main(int argc, char **argv)
 
 	cinit();
 	sinit();
-
+	fmtinstall('I', Ifmt);
 	vmstart = -1;
 	for(ap = argv; ap < argv+argc; ap++)
 		asmfile(*ap);
@@ -246,6 +246,7 @@ asmfile(char *file)
 {
 	int fd;
 
+//	print("asmfile: %s\n", file);
 	if((fd = open(file, OREAD)) == -1)
 		return -1;
 	Binit(&bin, fd, OREAD);
@@ -259,11 +260,10 @@ asmfile(char *file)
 }
 
 int
-unpack(int l, int *apart, int *ipart, int *fpart)
+unpack(u32int inst, int *apart, int *ipart, int *fpart)
 {
-	int inst, opc;
+	int opc;
 
-	inst = cells[l];
 	opc = V(inst, F(5, 5));
 	*fpart = V(inst, F(4, 4));
 	*ipart = V(inst, F(3, 3));
@@ -271,29 +271,27 @@ unpack(int l, int *apart, int *ipart, int *fpart)
 	return opc;
 }
 
-void
-prinst(int l)
+int
+Ifmt(Fmt *f)
 {
+	u32int inst;
 	int i, apart, ipart, fpart, opc, a, b;
 
-	opc = unpack(l, &apart, &ipart, &fpart);
+	inst = va_arg(f->args, u32int);
+	opc = unpack(inst, &apart, &ipart, &fpart);
 	for(i = 0; i < nelem(res); i++) {
 		if(res[i].c == opc)
 			break;
 	}
 	UNF(a, b, fpart);
-	if(res[i+1].c != opc) {
-		print("%s\t%d,%d(%d|%d:%d)\n", res[i].name, apart, ipart, fpart, a, b);
-		return;
-	}
-	while(res[i].c == opc) {
-		if(res[i].f == fpart) {
-			print("%s\t%d,%d(%d|%d:%d)\n", res[i].name, apart, ipart, fpart, a, b);
-			return;
-		}
+	if(res[i+1].c != opc)
+		return fmtprint(f, "%s\t%d,%d(%d | %d:%d)", res[i].name, apart, ipart, fpart, a, b);
+	while(res[i].c == opc && i < nelem(res)) {
+		if(res[i].f == fpart)
+			return fmtprint(f, "%s\t%d,%d(%d | %d:%d)", res[i].name, apart, ipart, fpart, a, b);
 		i++;
 	}
-	print("%d\t%d,%d(%d|%d:%d)\n", opc, apart, ipart, fpart, a, b);
+	return fmtprint(f, "%d\t%d,%d(%d | %d:%d)", opc, apart, ipart, fpart, a, b);
 }
 
 long
@@ -338,7 +336,7 @@ yylex(void)
 			*bp = Bgetrune(&bin);
 		}
 		if(Bgetrune(&bin) != '"')
-			error("Bad string literal\n");
+			yyerror("Bad string literal\n");
 		yylval.rbuf = buf;
 //		print("yylex returning string\n");
 		return LSTR;
@@ -352,9 +350,9 @@ yylex(void)
 	for(;;) {
 //		print("forming sym %C\n", r);
 		if(runetomix(r) == -1) 
-			error("Invalid character");
+			yyerror("Invalid character %C", r);
 		if(bp == ep)
-			error("Symbol or number too long");
+			yyerror("Symbol or number too long");
 		*bp++ = r;
 		if(isnum && (r >= Runeself || !isdigit(r)))
 			isnum = 0;
@@ -373,6 +371,7 @@ yylex(void)
 		case '=':
 		case ' ':
 		case '/':
+		case '#':
 			Bungetrune(&bin);
 			*bp = '\0';
 			goto End;
@@ -387,12 +386,6 @@ End:
 	yylval.sym = sym(cbuf);
 //	print("yylex %s %ld\n", yylval.sym->name, yylval.sym->lex);
 	return yylval.sym->lex;
-}
-
-void
-yyerror(char *e)
-{
-	error(e);
 }
 
 Sym*
@@ -464,7 +457,7 @@ V(u32int w, int f)
 
 	d = b - a;
 	if(a > 5 || b > 5 || d < 0 || d > 4)
-		error("Invalid fpart");
+		vmerror("Invalid fpart %d", f);
 
 	return mval(w, 5-b, mask[d]);
 }
@@ -632,7 +625,7 @@ mixslra(int m, int left)
 	u32int val;
 
 	if(m < 0)
-		error("Bad shift");
+		vmerror("Bad shift A %d", m);
 	if(m > 4) {
 		ra &= ~MASK5;
 		return;
@@ -652,7 +645,7 @@ mixslrax(int m, int left)
 	u64int rax;
 
 	if(m < 0)
-		error("Bad shift");
+		vmerror("Bad shift AX %d", m);
 	if(m > 9) {
 		ra &= ~MASK5;
 		rx &= ~MASK5;
@@ -677,7 +670,7 @@ mixslc(int m)
 	u64int rax, s;
 
 	if(m < 0)
-		error("Bad shift");
+		vmerror("Bad shift SLC %d", m);
 
 	m %= 10;
 
@@ -702,7 +695,7 @@ mixsrc(int m)
 	u64int rax, s;
 
 	if(m < 0)
-		error("Bad shift");
+		vmerror("Bad shift SRC %d", m);
 
 	m %= 10;
 
@@ -731,7 +724,7 @@ mixmove(int s, int f)
 
 	d = mval(ri[1], 0, MASK2);
 	if(d < 0 || d > 4000)
-		error("Bad address");
+		vmerror("Bad address MOVE %d", d);
 	memcpy(cells+d, cells+s, f*sizeof(u32int));
 	d += f;
 	d &= MASK2;
@@ -777,7 +770,7 @@ fset(u32int w, u32int v, int f, int sign)
 
 	d = b - a;
 	if(a > 5 || b > 5 || d < 0 || d > 4)
-		error("Bad fpart");
+		vmerror("Bad fpart (%d:%d)", a, b);
 	v &= mask[d];
 	v <<= (5-b) * BITS;
 	w &= ~(mask[d] << (5-b)*BITS);
@@ -875,7 +868,7 @@ mixjaxic(int m, int ip, u32int r, u32int msk, int f)
 
 	v = mval(r, 0, msk);
 	switch(f) {
-	default:	error("Bad instruction");
+	default:	vmerror("Bad instruction JA condition: %d", f);
 	case 0:	c = v < 0;	break;
 	case 1:	c = v == 0;	break;
 	case 2:	c = v > 0;	break;
@@ -925,15 +918,16 @@ mixvm(int ip, int once)
 {
 	int a, i, f, c, m, inst;
 
+	curpc = ip;
 Top:
 	for (;;) {
-//		print("dovm: ip is %d\n", ip);
-//		prinst(ip);
-		if(ip < 0 || ip > 4000)
-			error("Bad memory access %d\n", ip);
-		if(bp[ip] && !once)
-			return ip;
-		inst = cells[ip];
+//		print("dovm: curpc is %d\n", curpc);
+//		prinst(curpc);
+		if(curpc < 0 || curpc > 4000)
+			vmerror("Bad PC %d", curpc);
+		if(bp[curpc] && !once)
+			return curpc;
+		inst = cells[curpc];
 //		print("dovm: inst is %ud\n", inst);
 		a = V(inst, F(0, 2));
 		i = V(inst, F(3, 3));
@@ -974,7 +968,7 @@ Top:
 		case 5:
 			switch(f) {
 			default:
-				error("Bad instruction");
+				vmerror("Bad instruction NUM or CHAR: %d", f);
 			case 0:
 				mixnum();
 				break;
@@ -987,7 +981,7 @@ Top:
 			break;
 		case 6:
 			switch(f) {
-			default: error("Bad instruction");
+			default: vmerror("Bad instruction shift: %d", f);
 			case 0: mixslra(m, 1);	break;
 			case 1: mixslra(m, 0);	break;
 			case 2: mixslrax(m, 1);	break;
@@ -1036,7 +1030,7 @@ Top:
 			cells[m] = 0; /* STZ */
 			break;
 		case 34:
-			ip = mixjbus(m, f, ip);
+			curpc = mixjbus(m, f, curpc);
 			goto Top;
 		case 35:
 			mixioc(m, f);
@@ -1048,32 +1042,32 @@ Top:
 			mixout(m, f);
 			break;
 		case 38:
-			ip = mixjred(m, f, ip);
+			curpc = mixjred(m, f, curpc);
 			break;
 		case 39:
 			switch(f) {
-			default: error("Bad instruction");
-			case 0: ip = mixjmp(m, ip);	break;
-			case 1: ip = m;	break;
-			case 2: ip = mixjov(m, ip);	break;
-			case 3: ip = mixjnov(m, ip);	break;
-			case 4: ip = mixjc(m, ip, cl, 0);	break;
-			case 5: ip = mixjc(m, ip, ce, 0);	break;
-			case 6: ip = mixjc(m, ip, cg, 0);	break;
-			case 7: ip = mixjc(m, ip, cg, ce);	break;
-			case 8: ip = mixjc(m, ip, cl, cg);	break;
-			case 9: ip = mixjc(m, ip, cl, ce);	break;
+			default: vmerror("Bad jmp instruction: %d", f);
+			case 0: curpc = mixjmp(m, curpc);	break;
+			case 1: curpc = m;	break;
+			case 2: curpc = mixjov(m, curpc);	break;
+			case 3: curpc = mixjnov(m, curpc);	break;
+			case 4: curpc = mixjc(m, curpc, cl, 0);	break;
+			case 5: curpc = mixjc(m, curpc, ce, 0);	break;
+			case 6: curpc = mixjc(m, curpc, cg, 0);	break;
+			case 7: curpc = mixjc(m, curpc, cg, ce);	break;
+			case 8: curpc = mixjc(m, curpc, cl, cg);	break;
+			case 9: curpc = mixjc(m, curpc, cl, ce);	break;
 			}
 			goto Top;
 		case 40:
-			ip = mixjaxic(m, ip, ra, MASK5, f);
+			curpc = mixjaxic(m, curpc, ra, MASK5, f);
 			goto Top;
 		case 41: case 42: case 43:
 		case 44: case 45: case 46:
-			ip = mixjaxic(m, ip, ri[c-40], MASK2, f);
+			curpc = mixjaxic(m, curpc, ri[c-40], MASK2, f);
 			goto Top;
 		case 47:
-			ip = mixjaxic(m, ip, rx, MASK5, f);
+			curpc = mixjaxic(m, curpc, rx, MASK5, f);
 			goto Top;
 		case 48:
 			switch(f) {
@@ -1114,8 +1108,8 @@ Top:
 			mixcmp(m, f, rx);
 			break;
 		}
-		ip++;
+		curpc++;
 		if(once)
-			return ip;
+			return curpc;
 	}
 }

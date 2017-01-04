@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 #include <avl.h>
 #include <bio.h>
 #include "mix.h"
@@ -7,10 +8,55 @@
 static char buf[1024];
 
 char*
-skip(char *s, int c) {
-	while(*s == c)
+strskip(char *s) {
+	while(isspace(*s))
 		s++;
 	return s;
+}
+
+char*
+strim(char *s)
+{
+	char *t;
+
+	if(*s == '\0')
+		return s;
+
+	t = s + strlen(s) - 1;
+	while(isspace(*t) && t > s)
+		t--;
+	t[1] = '\0';
+	return s;
+}
+
+void
+yyerror(char *s, ...)
+{
+	char *bp;
+	va_list a;
+
+	bp = seprint(buf, buf+1024, "Assembly error: %s:%d: ", filename, line);
+	va_start(a, s);
+	bp = vseprint(bp, buf+1024, s, a);
+	va_end(a);
+	*bp++ = '\n';
+	write(2, buf, bp - buf);
+	longjmp(errjmp, 1);
+}
+
+void
+vmerror(char *s, ...)
+{
+	char *bp;
+	va_list a;
+
+	bp = seprint(buf, buf+1024, "VM error at %d: ", curpc);
+	va_start(a, s);
+	bp = vseprint(bp, buf+1024, s, a);
+	va_end(a);
+	*bp++ = '\n';
+	write(2, buf, bp - buf);
+	longjmp(errjmp, 1);
 }
 
 void
@@ -19,13 +65,12 @@ error(char *s, ...)
 	char *bp;
 	va_list a;
 
-	bp = seprint(buf, buf+1024, "Error: %s:%d: ", filename, line);
 	va_start(a, s);
-	bp = vseprint(bp, buf+1024, s, a);
+	bp = vseprint(buf, buf+1024, s, a);
 	va_end(a);
 	*bp++ = '\n';
 	write(2, buf, bp - buf);
-	longjmp(errjmp, 1);
+	exits("error");
 }
 
 void*

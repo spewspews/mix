@@ -1,3 +1,5 @@
+#pragma varargck type "I" u32int
+
 typedef struct Sym Sym;
 typedef struct Refinst Refinst;
 typedef struct Wval Wval;
@@ -33,26 +35,27 @@ void mixprint(int, int);
 
 long yylex(void);
 int yyparse(void);
-void yyerror(char*);
+void yyerror(char*, ...);
+void vmerror(char*, ...);
 void skipto(char);
 Sym *sym(char*);
 void sinit(void);
 int asmfile(char*);
 int V(u32int, int);
-void prinst(int);
+int Ifmt(Fmt*);
 
 Rune mixtorune(int);
 int runetomix(Rune);
 void cinit(void);
 
-void error(char*, ...);
 void warn(char*, ...);
 void *emalloc(ulong);
 void *emallocz(ulong);
 void *erealloc(void*, ulong);
-char *skip(char*, int);
+char *strskip(char*);
+char *strim(char*);
 
-int star, line, vmstart, yydone;
+int star, line, vmstart, yydone, curpc;
 Con *cons;
 char *filename;
 extern int mask[5];
