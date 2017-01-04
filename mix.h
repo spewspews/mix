@@ -26,8 +26,10 @@ struct Con {
 };
 
 int mixvm(int, int);
-void mix(void);
+void repl(void);
 u32int fset(u32int, u32int, int, int);
+
+void mixprint(int, int);
 
 long yylex(void);
 int yyparse(void);
@@ -36,6 +38,8 @@ void skipto(char);
 Sym *sym(char*);
 void sinit(void);
 int asmfile(char*);
+int V(u32int, int);
+void prinst(int);
 
 Rune mixtorune(int);
 int runetomix(Rune);
@@ -55,6 +59,7 @@ extern int mask[5];
 u32int cells[4000];
 char bp[4000];
 jmp_buf errjmp;
+Biobuf bin;
 
 u32int ra, rx, ri[7];
 int ce, cl, cg, ot;

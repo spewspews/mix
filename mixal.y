@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <avl.h>
+#include <bio.h>
 #include "mix.h"
 %}
 
