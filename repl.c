@@ -89,9 +89,10 @@ breakp(char *line)
 {
 	long l;
 
+	line = strskip(line);
 	if(!isdigit(*line))
 		return -1;
-	l = strtol(strskip(line), nil, 10);
+	l = strtol(line, nil, 10);
 	if(l < 0 || l > 4000)
 		return -1;
 	bp[l] ^= 1;
