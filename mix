@@ -77,7 +77,8 @@ Quit the emulator/assembler.
 The
 .I addr
 field of the above instructions must be an integer between 0 and 3999
-inclusive.
+inclusive. A number-sign (#) starts a comment which extends to the end
+of the line.
 .SH SOURCE
 .B /sys/src/cmd/games/mix
 .SH "SEE ALSO"
@@ -97,5 +98,9 @@ to 0 instead of to a location determined by
 the
 .B END
 psuedo-instruction.
+.PP
 The magnetic tapes and drum units are not
 implemented.
+.PP
+Comments are handled as described above and not
+as Knuth specifies.

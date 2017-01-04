@@ -305,13 +305,15 @@ yylex(void)
 	if(yydone)
 		return -1;
 
+Loop:
 	r = Bgetrune(&bin);
 //	print("yylex start %C\n", r);
 	switch(r) {
 	case Beof:
 		return -1;
 	case '\t':
-		return ' ';
+	case ' ':
+		goto Loop;
 	case '\n':
 		line++;
 	case '+':
@@ -322,7 +324,6 @@ yylex(void)
 	case '(':
 	case ')':
 	case '=':
-	case ' ':
 		return r;
 	case '/':
 		r = Bgetrune(&bin);

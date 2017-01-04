@@ -36,37 +36,37 @@ inst:
 		defloc($loc, star);
 		asm($LOP, 0, 0, -1);
 	}
-|	loc LOP ws apart ipart fpart eol
+|	loc LOP apart ipart fpart eol
 	{
 		defloc($loc, star);
 		asm($LOP, $apart, $ipart, $fpart);
 	}
-|	loc LOP ws reflit ipart fpart eol
+|	loc LOP reflit ipart fpart eol
 	{
 		defloc($loc, star);
 		addref($reflit, star);
 		refasm($LOP, $ipart, $fpart);
 	}
-|	loc LEQU ws wval eol
+|	loc LEQU wval eol
 	{
 		defloc($loc, $wval);
 	}
-|	loc LORIG ws wval eol
+|	loc LORIG wval eol
 	{
 		defloc($loc, star);
 		star = $wval;
 	}
-|	loc LCON ws wval1 eol
+|	loc LCON wval1 eol
 	{
 		defloc($loc, star);
 		cells[star++] = $wval1;
 	}
-|	loc LALF ws LSTR eol
+|	loc LALF LSTR eol
 	{
 		defloc($loc, star);
 		alf(star++, $LSTR);
 	}
-|	loc LEND ws wval eol
+|	loc LEND wval eol
 	{
 		endprog($wval);
 		defloc($loc, star);
@@ -76,15 +76,11 @@ loc:
 	{
 		$$ = nil;
 	}
-|	ws
-	{
-		$$ = nil;
-	}
-|	LSYMREF ws
+|	LSYMREF
 	{
 		$$ = $LSYMREF;
 	}
-|	LHERE ws
+|	LHERE
 	{
 		Sym *f;
 		int l;
@@ -100,10 +96,7 @@ loc:
 	}
 
 apart:
-	{
-		$$ = 0;
-	}
-|	exp
+	exp
 |	LBACK
 	{
 		$$ = back[($LBACK)->opc];
@@ -217,10 +210,6 @@ wval1:
 
 eol:
 	'\n'
-
-ws:
-	' '
-|	ws ' '
 
 %%
 
