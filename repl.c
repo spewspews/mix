@@ -113,10 +113,13 @@ Err:
 void
 asm(char *l)
 {
+	if(yydone) {
+		print("Assembly complete\n");
+		return;
+	}
 	l = skip(l, ' ');
 	if(*l++ == '<') {
 		Bterm(&bin);
-		print("asm: %s\n", l);
 		if(asmfile(skip(l, ' ')) == -1)
 			goto Err;
 		Binit(&bin, 0, OREAD);

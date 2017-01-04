@@ -355,11 +355,14 @@ alf(int loc, Rune *b)
 void
 endprog(int start)
 {
-	Con *c;
-	for(c = cons; c != nil; c = c->link) {
+	Con *c, *link;
+	for(c = cons; c != nil; c = link) {
 		defloc(c->sym, star);
 		cells[star++] = c->exp;
+		link = c->link;
+		free(c);
 	}
+	cons = nil;
 	vmstart = start;
 	yydone = 1;
 }
