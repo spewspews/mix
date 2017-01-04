@@ -25,8 +25,8 @@ struct Con {
 	Con *link;
 };
 
-void mixvm(int);
-void mixquery(void);
+int mixvm(int, int);
+void mix(void);
 u32int fset(u32int, u32int, int, int);
 
 long yylex(void);
@@ -35,6 +35,7 @@ void yyerror(char*);
 void skipto(char);
 Sym *sym(char*);
 void sinit(void);
+int asmfile(char*);
 
 Rune mixtorune(int);
 int runetomix(Rune);
@@ -45,12 +46,15 @@ void warn(char*, ...);
 void *emalloc(ulong);
 void *emallocz(ulong);
 void *erealloc(void*, ulong);
+char *skip(char*, int);
 
-int star, line, vmstart, yydone, yylit;
+int star, line, vmstart, yydone;
 Con *cons;
 char *filename;
 extern int mask[5];
 u32int cells[4000];
+char bp[4000];
+jmp_buf errjmp;
 
 u32int ra, rx, ri[7];
 int ce, cl, cg, ot;

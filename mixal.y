@@ -27,10 +27,7 @@
 %%
 
 prog:
-	prog1 end
-
-prog1:
-|	prog1 inst
+|	prog inst
 
 inst:
 	loc LOP eol
@@ -68,9 +65,7 @@ inst:
 		defloc($loc, star);
 		alf(star++, $LSTR);
 	}
-
-end:
-	loc LEND ws wval eol
+|	loc LEND ws wval eol
 	{
 		endprog($wval);
 		defloc($loc, star);
@@ -278,7 +273,7 @@ addref(Sym *ref, long star)
 //	print("addedref %p %d %d\n", ref->refs, ref->i, ref->max);
 }
 
-void
+static void
 asm(Sym *op, long apart, long ipart, long fpart)
 {
 	u32int inst, mval;

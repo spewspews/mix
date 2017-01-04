@@ -5,6 +5,13 @@
 
 static char buf[1024];
 
+char*
+skip(char *s, int c) {
+	while(*s == c)
+		s++;
+	return s;
+}
+
 void
 error(char *s, ...)
 {
@@ -17,22 +24,7 @@ error(char *s, ...)
 	va_end(a);
 	*bp++ = '\n';
 	write(2, buf, bp - buf);
-	mixquery();
-	exits("error");
-}
-
-void
-warn(char *s, ...)
-{
-	char *bp;
-	va_list a;
-
-	bp = seprint(buf, buf+1024, "Warning: %s:%d: ", filename, line);
-	va_start(a, s);
-	bp = vseprint(bp, buf+1024, s, a);
-	va_end(a);
-	*bp++ = '\n';
-	write(2, buf, bp - buf);
+	longjmp(errjmp, 1);
 }
 
 void*

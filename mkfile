@@ -7,6 +7,6 @@ OFILES=y.tab.$O\
 	char.$O\
 	util.$O
 HFILES=mix.h y.tab.h
-BIN=.
+BIN=/$objtype/bin/games
 
 </sys/src/cmd/mkone
