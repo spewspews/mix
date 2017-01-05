@@ -343,6 +343,7 @@ Loop:
 		return LSTR;
 	case '#':
 		skipto('\n');
+		line++;
 		return '\n';
 	}
 	bp = buf;

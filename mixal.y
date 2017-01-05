@@ -31,11 +31,7 @@ prog:
 |	prog inst
 
 inst:
-	loc LOP eol
-	{
-		defloc($loc, star);
-		asm($LOP, 0, 0, -1);
-	}
+	eol
 |	loc LOP apart ipart fpart eol
 	{
 		defloc($loc, star);
@@ -96,7 +92,10 @@ loc:
 	}
 
 apart:
-	exp
+	{
+		$$ = 0;
+	}
+|	exp
 |	LBACK
 	{
 		$$ = back[($LBACK)->opc];
