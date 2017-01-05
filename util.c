@@ -143,3 +143,28 @@ efmtprint(Fmt *f, char *fmt, ...)
 		error("Printing error.");
 	va_end(va);
 }
+
+void*
+bsearch(void *k, void *a, long n, int w, int (*cmp)(void*, void*))
+{
+	void *e;
+	int c;
+
+	while(n > 0) {
+		e = (char*)a + w*(n/2);
+		c = cmp(k, e);
+		if(c == 0)
+			return e;
+
+		if(n == 1)
+			break;
+
+		if(c < 0)
+			n /= 2;
+		else {
+			a = e;
+			n -= n/2;
+		}
+	}
+	return nil;
+}

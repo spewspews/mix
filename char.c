@@ -6,12 +6,10 @@
 
 typedef
 struct Mixchar {
-	Avl;
 	Rune r;
 	int m;
 } Mixchar;
 
-static Avltree *rtomix;
 static Rune mixtor[] = {
 	' ',
 	'A',
@@ -71,10 +69,10 @@ static Rune mixtor[] = {
 	'\''
 };
 
-static Mixchar pool[nelem(mixtor)];
+static Mixchar rtomix[nelem(mixtor)];
 
 static int
-runecmp(Avl *a, Avl *b)
+runecmp(void *a, void *b)
 {
 	Rune ra, rb;
 
@@ -94,13 +92,12 @@ cinit(void)
 	int i;
 	Mixchar *a;
 
-	rtomix = avlcreate(runecmp);
-	for(i = 0; i < nelem(mixtor); i++) {
-		a = pool+i;
+	for(i = 0; i < nelem(rtomix); i++) {
+		a = rtomix+i;
 		a->r = mixtor[i];
 		a->m = i;
-		avlinsert(rtomix, a);
 	}
+	qsort(rtomix, nelem(rtomix), sizeof(*rtomix), runecmp);
 }
 
 int
@@ -108,11 +105,10 @@ runetomix(Rune r)
 {
 	Mixchar *c, l;
 
-//	print("looking up %C\n", r);
 	l.r = r;
-	c = (Mixchar*)avllookup(rtomix, &l);
+	c = (Mixchar*)bsearch(&l, rtomix, nelem(rtomix), sizeof(*rtomix), runecmp);
 	if(c == nil) {
-//		print("Not found!!\n");
+		print("Not found!!\n");
 		return -1;
 	}
 

@@ -54,6 +54,7 @@ void *emallocz(ulong);
 void *erealloc(void*, ulong);
 char *strskip(char*);
 char *strim(char*);
+void *bsearch(void*, void*, long, int, int(*)(void*, void*));
 
 int star, line, vmstart, yydone, curpc;
 Con *cons;
