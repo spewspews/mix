@@ -736,26 +736,17 @@ mixmove(int s, int f)
 void
 mixld(int m, int f, u32int *reg)
 {
-	int v;
-
-//	print("mixld: m is %d\n", m);
-	v = V(cells[m], f);
-//	print("loading %d with %d\n", mval(*reg, 0, MASK5), v);
-	*reg = v < 0 ? -v|SIGNB : v;
-//	print("now is %d\n", *reg);
+	*reg = fset(0, cells[m], f);
 }
 
 void
 mixldn(int m, int f, u32int *reg)
 {
-	int v;
-
-	v = -V(cells[m], f);
-	*reg = v < 0 ? -v|SIGNB : v;
+	*reg = fset(0, cells[m], f) ^ SIGNB;
 }
 
 u32int
-fset(u32int w, u32int v, int f, int sign)
+fset(u32int w, u32int v, int f)
 {
 	int a, b, d;
 
@@ -764,7 +755,9 @@ fset(u32int w, u32int v, int f, int sign)
 
 	UNF(a, b, f);
 	if(a == 0) {
-		w = sign ? w|SIGNB : w&~SIGNB;
+//		print("fset w before %ud\n", w);
+		w = v>>31 ? w|SIGNB : w&~SIGNB;
+//		print("fset w %ud\n", w);
 		if(b == 0)
 			return w;
 		a++;
@@ -782,7 +775,11 @@ fset(u32int w, u32int v, int f, int sign)
 void
 mixst(int m, int f, u32int reg, u32int msk)
 {
-	cells[m] = fset(cells[m], reg&msk, f, reg>>31);
+//	print("mixst: reg f msk %d %d %d\n", reg, f, msk);
+	if(reg>>31)
+		cells[m] = fset(cells[m], reg&msk | SIGNB, f);
+	else
+		cells[m] = fset(cells[m], reg&msk, f);
 }
 
 int
