@@ -37,7 +37,9 @@ Set or unset a breakpoint at
 .I addr.
 .TP
 .B c
-Resets the mix machine to a fresh state by clearing all memory
+Resets the
+.B MIX
+machine to a fresh state by clearing all memory
 and registers.
 .TP
 .B d addr
