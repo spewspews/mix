@@ -52,10 +52,12 @@ void warn(char*, ...);
 void *emalloc(ulong);
 void *emallocz(ulong);
 void *erealloc(void*, ulong);
+char *estrdup(char*);
 char *strskip(char*);
 char *strim(char*);
 void *bsearch(void*, void*, long, int, int(*)(void*, void*));
 
+Avltree *syms;
 int star, line, vmstart, yydone, curpc;
 Con *cons;
 char *filename;

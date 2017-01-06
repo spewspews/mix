@@ -102,6 +102,8 @@ breakp(char *line)
 int
 asm(char *l)
 {
+	char *file;
+
 	if(yydone) {
 		print("Assembly complete\n");
 		return 0;
@@ -113,9 +115,13 @@ asm(char *l)
 		Bterm(&bin);
 		l = strskip(l);
 //		print("asm: %s\n", l);
-		if(asmfile(strim(l)) == -1)
+		file = estrdup(strim(l));
+		if(asmfile(file) == -1) {
+			free(file);
 			return -1;
+		}
 		Binit(&bin, 0, OREAD);
+		free(file);
 		return 0;
 	}
 
@@ -189,6 +195,17 @@ out(char *line)
 }
 
 void
+clearsyms(Sym *s)
+{
+	if(s == nil)
+		return;
+
+	clearsyms((Sym*)s->c[0]);
+	clearsyms((Sym*)s->c[1]);
+	free(s);
+}
+
+void
 repl(void)
 {
 	char *line, c;
@@ -218,17 +235,22 @@ repl(void)
 			if(disp(line) == -1)
 				goto Err;
 			break;
-		case 'r':
-			if(dispreg(line+1) == -1)
+		case 'a':
+			if(asm(line+1) == -1)
 				goto Err;
 			break;
 		case 'b':
 			if(breakp(line+1) == -1)
 				goto Err;
 			break;
-		case 'a':
-			if(asm(line+1) == -1)
-				goto Err;
+		case 'c':
+			ra = rx = ri[0] = ri[1] = ri[2] = ri[3] = ri[4] = ri[5] = ri[6] = 0;
+			memset(cells, 0, sizeof(cells));
+			vmstart = -1;
+			yydone = 0;
+			clearsyms((Sym*)syms->root);
+			syms->root = nil;
+			sinit();
 			break;
 		case 'd':
 			if(disasm(line+1) == -1)
@@ -236,6 +258,10 @@ repl(void)
 			break;
 		case 'o':
 			if(out(line+1) == -1)
+				goto Err;
+			break;
+		case 'r':
+			if(dispreg(line+1) == -1)
 				goto Err;
 			break;
 		case 's':

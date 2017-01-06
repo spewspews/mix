@@ -205,7 +205,6 @@ int mask[] = {
 
 int symcmp(Avl*, Avl*);
 Sym *sym(char*);
-Avltree *syms;
 
 void
 main(int argc, char **argv)
@@ -601,7 +600,7 @@ mixchar(void)
 	u32int a, val;
 
 //	print("mixchar: ra starts as %d\n", ra);
-	val = ra;
+	val = ra & ~SIGNB;
 	for(i = 0; i < 5; i++) {
 		a = val % 10;
 		a += 30;
@@ -733,18 +732,6 @@ mixmove(int s, int f)
 	ri[1] = d < 0 ? -d|SIGNB : d;
 }
 
-void
-mixld(int m, int f, u32int *reg)
-{
-	*reg = fset(0, cells[m], f);
-}
-
-void
-mixldn(int m, int f, u32int *reg)
-{
-	*reg = fset(0, cells[m], f) ^ SIGNB;
-}
-
 u32int
 fset(u32int w, u32int v, int f)
 {
@@ -770,16 +757,6 @@ fset(u32int w, u32int v, int f)
 	v <<= (5-b) * BITS;
 	w &= ~(mask[d] << (5-b)*BITS);
 	return w | v;
-}
-
-void
-mixst(int m, int f, u32int reg, u32int msk)
-{
-//	print("mixst: reg f msk %d %d %d\n", reg, f, msk);
-	if(reg>>31)
-		cells[m] = fset(cells[m], reg&msk | SIGNB, f);
-	else
-		cells[m] = fset(cells[m], reg&msk, f);
 }
 
 int
@@ -915,6 +892,7 @@ mixcmp(int m, int f, u32int r)
 int
 mixvm(int ip, int once)
 {
+	u32int r;
 	int a, i, f, c, m, inst;
 
 	curpc = ip;
@@ -993,37 +971,39 @@ Top:
 			mixmove(m, f);
 			break;
 		case 8:
-			mixld(m, f, &ra);
+			ra = fset(0, cells[m], f);	/* LDA */
 			break;
 		case 9: case 10: case 11:
 		case 12: case 13: case 14:
-			mixld(m, f, ri + (c-8));
+			ri[c-8] = fset(0, cells[m], f);	/* LD[1-6] */
 			break;
 		case 15:
-			mixld(m, f, &rx);
+			rx = fset(0, cells[m], f);	/* LDX */
 			break;
 		case 16:
-			mixldn(m, f, &ra);
+			ra = fset(0, cells[m], f) ^ SIGNB;	/* LDAN */
 			break;
 		case 17: case 18: case 19:
 		case 20: case 21: case 22:
-			mixldn(m, f, ri + (c-16));
+			ri[c-16] = fset(0, cells[m], f) ^ SIGNB;	/* LD[1-6]N */
 			break;
 		case 23:
-			mixldn(m, f, &rx);
+			rx = fset(0, cells[m], f) ^ SIGNB;	/* LDXN */
 			break;
 		case 24:
-			mixst(m, f, ra, MASK5);
+			cells[m] = fset(cells[m], ra, f); /* STA */
 			break;
 		case 25: case 26: case 27:
 		case 28: case 29: case 30:
-			mixst(m, f, ri[c-24], MASK2);
+			r = ri[c-24] & ~(MASK3 << 2*BITS);
+			cells[m] = fset(cells[m], r, f); /* ST[1-6] */
 			break;
 		case 31:
-			mixst(m, f, rx, MASK5);
+			cells[m] = fset(cells[m], rx, f); /* STX */
 			break;
 		case 32:
-			mixst(m, f, ri[0], MASK2);
+			r = ri[0] & ~(MASK3 << 2*BITS);
+			cells[m] = fset(cells[m], r, f); /* STJ */
 			break;
 		case 33:
 			cells[m] = 0; /* STZ */
@@ -1047,7 +1027,7 @@ Top:
 			switch(f) {
 			default: vmerror("Bad jmp instruction: %d", f);
 			case 0: curpc = mixjmp(m, curpc);	break;
-			case 1: curpc = m;	break;
+			case 1: curpc = m;	break;	/* JSJ */
 			case 2: curpc = mixjov(m, curpc);	break;
 			case 3: curpc = mixjnov(m, curpc);	break;
 			case 4: curpc = mixjc(m, curpc, cl, 0);	break;
@@ -1072,8 +1052,8 @@ Top:
 			switch(f) {
 			case 0:	mixinc(m, &ra);	break;
 			case 1: mixinc(-m, &ra);	break;
-			case 2:	ra = m < 0 ? -m|SIGNB : m;	break;
-			case 3:	ra = m > 0 ? m|SIGNB : -m;	break;
+			case 2:	ra = m < 0 ? -m|SIGNB : m;	break;	/* ENTA */
+			case 3:	ra = m > 0 ? m|SIGNB : -m;	break;	/* ENNA */
 			}
 			break;
 		case 49: case 50: case 51:
@@ -1081,16 +1061,16 @@ Top:
 			switch(f) {
 			case 0:	mixinc(m, ri+(c-48));	break;
 			case 1:	mixinc(-m, ri+(c-48));	break;
-			case 2:	ri[c-48] = m < 0 ? -m|SIGNB : m;	break;
-			case 3:	ri[c-48] = m > 0 ? m|SIGNB : -m;	break;
+			case 2:	ri[c-48] = m < 0 ? -m|SIGNB : m;	break;	/* ENT[1-6] */
+			case 3:	ri[c-48] = m > 0 ? m|SIGNB : -m;	break;	/* ENN[1-6] */
 			}
 			break;
 		case 55:
 			switch(f) {
 			case 0:	mixinc(m, &rx);	break;
 			case 1: mixinc(-m, &rx);	break;
-			case 2:	rx = m < 0 ? -m|SIGNB : m;	break;
-			case 3:	rx = m > 0 ? m|SIGNB : -m;	break;
+			case 2:	rx = m < 0 ? -m|SIGNB : m;	break;	/* ENTX */
+			case 3:	rx = m > 0 ? m|SIGNB : -m;	break;	/* ENNX */
 			}
 			break;
 		case 56:

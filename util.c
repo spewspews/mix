@@ -98,18 +98,6 @@ emallocz(ulong s)
 }
 
 void*
-ecalloc(ulong n, ulong s)
-{
-	void *v;
-
-	v = calloc(n, s);
-	if(v == nil)
-		error("Error allocating %lud: %r", s);
-	setmalloctag(v, getcallerpc(&s));
-	return v;
-}
-
-void*
 erealloc(void *p, ulong s)
 {
 	void *v;
@@ -121,27 +109,16 @@ erealloc(void *p, ulong s)
 	return v;
 }
 
-Rune*
-erunestrdup(Rune *s)
+char*
+estrdup(char *s)
 {
-	Rune *n;
+	char *n;
 
-	n = runestrdup(s);
+	n = strdup(s);
 	if(n == nil)
 		error("Error duplicating string %s: %r", s);
 	setmalloctag(n, getcallerpc(&s));
 	return n;
-}
-
-void
-efmtprint(Fmt *f, char *fmt, ...)
-{
-	va_list va;
-
-	va_start(va, fmt);
-	if(fmtvprint(f, fmt, va) < 0)
-		error("Printing error.");
-	va_end(va);
 }
 
 void*
