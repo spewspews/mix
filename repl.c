@@ -108,13 +108,10 @@ asm(char *l)
 		print("Assembly complete\n");
 		return 0;
 	}
-//	print("asm: %s\n", l);
 	l = strskip(l);
-//	print("asm: %s\n", l);
 	if(*l++ == '<') {
 		Bterm(&bin);
 		l = strskip(l);
-//		print("asm: %s\n", l);
 		file = estrdup(strim(l));
 		if(asmfile(file) == -1) {
 			free(file);

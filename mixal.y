@@ -141,7 +141,6 @@ exp:
 |	'-' aexp
 	{
 		$$ = -$aexp;
-//		print("aexp unary neg %ld\n", $$);
 	}
 |	exp '+' aexp
 	{
@@ -180,7 +179,6 @@ aexp:
 			$$ = -((long)mval);
 		} else
 			$$ = mval;
-//		print("aexp sym: %s, %ld\n", ($LSYMDEF)->name, $$);
 	}
 |	'*'
 	{
@@ -199,7 +197,6 @@ wval:
 wval1:
 	exp fpart
 	{
-//		print("got wval %ld\n", $exp);
 		$$ = wval(0, $exp, $fpart);
 	}
 |	wval ',' exp fpart
@@ -221,11 +218,9 @@ defrefs(Sym *sym, long apart)
 	u32int inst, mval;
 	int *ref, *ep;
 
-//	print("defref: %p %d\n", sym->refs, sym->i);
 	ep = sym->refs + sym->i;
 	for(ref = sym->refs; ref < ep; ref++) {
 		inst = cells[*ref];
-//		print("defref on %d\n", *ref);
 		inst &= ~(MASK2 << BITS*3);
 		if(apart < 0) {
 			mval = -apart;
@@ -242,9 +237,7 @@ defloc(Sym *sym, long val)
 {
 	if(sym == nil)
 		return;
-//	print("defloc %s %ld\n", sym->name, val);
 	defrefs(sym, val);
-//	print("defloc freeing %p\n", sym->refs);
 	free(sym->refs);
 	sym->lex = LSYMDEF;
 	sym->mval = val < 0 ? -val|SIGNB : val;
@@ -253,13 +246,11 @@ defloc(Sym *sym, long val)
 void
 addref(Sym *ref, long star)
 {
-//	print("addref %p %d %d\n", ref->refs, ref->i, ref->max);
 	if(ref->refs == nil || ref->i == ref->max) {
 		ref->max = ref->max == 0 ? 3 : ref->max*2;
 		ref->refs = erealloc(ref->refs, ref->max * sizeof(int));
 	}
 	ref->refs[ref->i++] = star;
-//	print("addedref %p %d %d\n", ref->refs, ref->i, ref->max);
 }
 
 static void
@@ -267,7 +258,6 @@ asm(Sym *op, long apart, long ipart, long fpart)
 {
 	u32int inst, mval;
 
-//	print("asm %s %d %d %d\n", op->name, apart, ipart, fpart);
 	inst = op->opc & MASK1;
 
 	if(fpart == -1)
@@ -292,7 +282,6 @@ refasm(Sym *op, long ipart, long fpart)
 {
 	u32int inst;
 
-//	print("refasm %s %d %d\n", op->name, ipart, fpart);
 	inst = op->opc & MASK1;
 
 	if(fpart == -1)

@@ -245,7 +245,6 @@ asmfile(char *file)
 {
 	int fd;
 
-//	print("asmfile: %s\n", file);
 	if((fd = open(file, OREAD)) == -1)
 		return -1;
 	Binit(&bin, fd, OREAD);
@@ -306,7 +305,6 @@ yylex(void)
 
 Loop:
 	r = Bgetrune(&bin);
-//	print("yylex start %C\n", r);
 	switch(r) {
 	case Beof:
 		return -1;
@@ -338,7 +336,6 @@ Loop:
 		if(Bgetrune(&bin) != '"')
 			yyerror("Bad string literal\n");
 		yylval.rbuf = buf;
-//		print("yylex returning string\n");
 		return LSTR;
 	case '#':
 		skipto('\n');
@@ -349,7 +346,6 @@ Loop:
 	ep = buf+nelem(buf)-1;
 	isnum = 1;
 	for(;;) {
-//		print("forming sym %C\n", r);
 		if(runetomix(r) == -1) 
 			yyerror("Invalid character %C", r);
 		if(bp == ep)
@@ -385,7 +381,6 @@ End:
 		return LNUM;
 	}
 	yylval.sym = sym(cbuf);
-//	print("yylex %s %ld\n", yylval.sym->name, yylval.sym->lex);
 	return yylval.sym->lex;
 }
 
@@ -546,12 +541,9 @@ mixdiv(int m, int f)
 	if(ra >> 31)
 		rax = -rax;
 
-//	print("mixdiv dividend: %lld\n", rax);
-//	print("mixdiv divisor: %d\n", v);
 	quot = rax / v;
 	rem = rax % v;
 
-//	print("mixdiv quot rem: %lld %d\n", quot, rem);
 	if(quot < 0) {
 		quot = -quot;
 		asignb = SIGNB;
@@ -569,7 +561,6 @@ mixdiv(int m, int f)
 
 	ra = quot & MASK5 | asignb;
 	rx = rem & MASK5 | xsignb;
-//	print("mixdiv ra, rx after: %d %d\n", mval(ra, 0, MASK5), mval(rx, 0, MASK5));
 }
 
 void
@@ -599,12 +590,10 @@ mixchar(void)
 	int i;
 	u32int a, val;
 
-//	print("mixchar: ra starts as %d\n", ra);
 	val = ra & ~SIGNB;
 	for(i = 0; i < 5; i++) {
 		a = val % 10;
 		a += 30;
-//		print("mixchar: rx digit is %d\n", a);
 		rx &= ~(MASK1 << i*BITS);
 		rx |= a << i*BITS;
 		val /= 10;
@@ -612,12 +601,10 @@ mixchar(void)
 	for(i = 0; i < 5; i++) {
 		a = val % 10;
 		a += 30;
-//		print("mixchar: ra digit is %d\n", a);
 		ra &= ~(MASK1 << i*BITS);
 		ra |= a << i*BITS;
 		val /= 10;
 	}
-//	print("mixchar: ra rx %d %d\n", ra, rx);
 }
 
 void
@@ -742,9 +729,7 @@ fset(u32int w, u32int v, int f)
 
 	UNF(a, b, f);
 	if(a == 0) {
-//		print("fset w before %ud\n", w);
 		w = v>>31 ? w|SIGNB : w&~SIGNB;
-//		print("fset w %ud\n", w);
 		if(b == 0)
 			return w;
 		a++;
@@ -800,7 +785,6 @@ mixjred(int m, int /*f*/, int /*ip*/)
 int
 mixjmp(int m, int ip)
 {
-//	print("mixjmp: m %d, ip %d\n", m, ip);
 	ri[0] = ip+1 & MASK2;
 	return m;
 }
@@ -898,20 +882,17 @@ mixvm(int ip, int once)
 	curpc = ip;
 Top:
 	for (;;) {
-//		print("dovm: curpc is %d\n", curpc);
 //		prinst(curpc);
 		if(curpc < 0 || curpc > 4000)
 			vmerror("Bad PC %d", curpc);
 		if(bp[curpc] && !once)
 			return curpc;
 		inst = cells[curpc];
-//		print("dovm: inst is %ud\n", inst);
 		a = V(inst, F(0, 2));
 		i = V(inst, F(3, 3));
 		f = V(inst, F(4, 4));
 		c = V(inst, F(5, 5));
 		m = M(a, i);
-//		print("dovm: a is %d; i is %d; m is %d\n", a, i, m);
 		switch(c) {
 		default:
 			fprint(2, "Bad op!\n");
