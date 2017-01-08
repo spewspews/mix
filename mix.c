@@ -723,6 +723,33 @@ mixmove(int s, int f)
 }
 
 u32int
+rset(u32int v, int f)
+{
+	u32int w;
+	int a, b, d;
+
+	if(f == 5)
+		return v;
+
+	UNF(a, b, f);
+	w = 0;
+	if(a == 0) {
+		if(v >> 31)
+			w = SIGNB;
+		if(b == 0)
+			return w;
+		a++;
+	}
+
+	d = b - a;
+	if(a > 5 || b > 5 || d < 0 || d > 4)
+		vmerror("Bad fpart (%d:%d)", a, b);
+	v &= mask[d] << (5-b) * BITS;
+	v >>= (5-b) * BITS;
+	return w | v;
+}
+
+u32int
 fset(u32int w, u32int v, int f)
 {
 	int a, b, d;
@@ -868,6 +895,7 @@ mixcmp(int m, int f, u32int r)
 
 	v1 = V(r, f);
 	v2 = V(cells[m], f);
+//	print("mixcmp: v1 v2 %d %d\n", v1, v2);
 	if(v1 < v2)
 		cl = 1;
 	else if(v1 > v2)
@@ -955,24 +983,24 @@ Top:
 			mixmove(m, f);
 			break;
 		case 8:
-			ra = fset(0, cells[m], f);	/* LDA */
+			ra = rset(cells[m], f);	/* LDA */
 			break;
 		case 9: case 10: case 11:
 		case 12: case 13: case 14:
-			ri[c-8] = fset(0, cells[m], f);	/* LD[1-6] */
+			ri[c-8] = rset(cells[m], f);	/* LD[1-6] */
 			break;
 		case 15:
-			rx = fset(0, cells[m], f);	/* LDX */
+			rx = rset(cells[m], f);	/* LDX */
 			break;
 		case 16:
-			ra = fset(0, cells[m], f) ^ SIGNB;	/* LDAN */
+			ra = rset(cells[m], f) ^ SIGNB;	/* LDAN */
 			break;
 		case 17: case 18: case 19:
 		case 20: case 21: case 22:
-			ri[c-16] = fset(0, cells[m], f) ^ SIGNB;	/* LD[1-6]N */
+			ri[c-16] = rset(cells[m], f) ^ SIGNB;	/* LD[1-6]N */
 			break;
 		case 23:
-			rx = fset(0, cells[m], f) ^ SIGNB;	/* LDXN */
+			rx = rset(cells[m], f) ^ SIGNB;	/* LDXN */
 			break;
 		case 24:
 			cells[m] = fset(cells[m], ra, f); /* STA */
