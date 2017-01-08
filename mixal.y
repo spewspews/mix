@@ -355,6 +355,6 @@ wval(u32int old, int exp, int f)
 	}
 
 	if(exp < 0)
-		return fset(old, -exp&MASK5 | SIGNB, f);
-	return fset(old, exp & MASK5, f);
+		return mixst(old, -exp&MASK5 | SIGNB, f);
+	return mixst(old, exp & MASK5, f);
 }

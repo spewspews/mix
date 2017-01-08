@@ -203,12 +203,18 @@ clearsyms(Sym *s)
 }
 
 void
-repl(void)
+repl(int go)
 {
 	char *line, c;
 	int len, once;
+		
 
 	Binit(&bin, 0, OREAD);
+
+	if(go) {
+		once = 0;
+		goto Go;
+	}
 
 	for(;;) {
 		print("MIX ");
@@ -264,6 +270,7 @@ repl(void)
 		case 's':
 			once = 1;
 		case 'g':
+		Go:
 			if(vmstart == -1)
 				goto Err;
 			if(setjmp(errjmp) == 0)

@@ -212,9 +212,12 @@ Sym *sym(char*);
 void
 main(int argc, char **argv)
 {
+	int go;
 	char **ap;
 
+	go = 0;
 	ARGBEGIN {
+	case 'g': go++; break;
 	} ARGEND
 
 	cinit();
@@ -223,7 +226,7 @@ main(int argc, char **argv)
 	vmstart = -1;
 	for(ap = argv; ap < argv+argc; ap++)
 		asmfile(*ap);
-	repl();
+	repl(go);
 	exits(nil);
 }
 
@@ -723,7 +726,7 @@ mixmove(int s, int f)
 }
 
 u32int
-rset(u32int v, int f)
+mixld(u32int v, int f)
 {
 	u32int w;
 	int a, b, d;
@@ -750,7 +753,7 @@ rset(u32int v, int f)
 }
 
 u32int
-fset(u32int w, u32int v, int f)
+mixst(u32int w, u32int v, int f)
 {
 	int a, b, d;
 
@@ -911,7 +914,6 @@ mixvm(int ip, int once)
 	int a, i, f, c, m, inst;
 
 	curpc = ip;
-Top:
 	for (;;) {
 //		prinst(curpc);
 		if(curpc < 0 || curpc > 4000)
@@ -983,46 +985,46 @@ Top:
 			mixmove(m, f);
 			break;
 		case 8:
-			ra = rset(cells[m], f);	/* LDA */
+			ra = mixld(cells[m], f);
 			break;
 		case 9: case 10: case 11:
 		case 12: case 13: case 14:
-			ri[c-8] = rset(cells[m], f);	/* LD[1-6] */
+			ri[c-8] = mixld(cells[m], f);
 			break;
 		case 15:
-			rx = rset(cells[m], f);	/* LDX */
+			rx = mixld(cells[m], f);
 			break;
 		case 16:
-			ra = rset(cells[m], f) ^ SIGNB;	/* LDAN */
+			ra = mixld(cells[m], f) ^ SIGNB;
 			break;
 		case 17: case 18: case 19:
 		case 20: case 21: case 22:
-			ri[c-16] = rset(cells[m], f) ^ SIGNB;	/* LD[1-6]N */
+			ri[c-16] = mixld(cells[m], f) ^ SIGNB;
 			break;
 		case 23:
-			rx = rset(cells[m], f) ^ SIGNB;	/* LDXN */
+			rx = mixld(cells[m], f) ^ SIGNB;
 			break;
 		case 24:
-			cells[m] = fset(cells[m], ra, f); /* STA */
+			cells[m] = mixst(cells[m], ra, f);
 			break;
 		case 25: case 26: case 27:
 		case 28: case 29: case 30:
 			r = ri[c-24] & ~(MASK3 << 2*BITS);
-			cells[m] = fset(cells[m], r, f); /* ST[1-6] */
+			cells[m] = mixst(cells[m], r, f);
 			break;
 		case 31:
-			cells[m] = fset(cells[m], rx, f); /* STX */
+			cells[m] = mixst(cells[m], rx, f);
 			break;
 		case 32:
 			r = ri[0] & ~(MASK3 << 2*BITS);
-			cells[m] = fset(cells[m], r, f); /* STJ */
+			cells[m] = mixst(cells[m], r, f);
 			break;
 		case 33:
 			cells[m] = 0; /* STZ */
 			break;
 		case 34:
 			curpc = mixjbus(m, f, curpc);
-			goto Top;
+			goto Again;
 		case 35:
 			mixioc(m, f);
 			break;
@@ -1049,23 +1051,31 @@ Top:
 			case 8: curpc = mixjc(m, curpc, cl, cg);	break;
 			case 9: curpc = mixjc(m, curpc, cl, ce);	break;
 			}
-			goto Top;
+			goto Again;
 		case 40:
 			curpc = mixjaxic(m, curpc, ra, MASK5, f);
-			goto Top;
+			goto Again;
 		case 41: case 42: case 43:
 		case 44: case 45: case 46:
 			curpc = mixjaxic(m, curpc, ri[c-40], MASK2, f);
-			goto Top;
+			goto Again;
 		case 47:
 			curpc = mixjaxic(m, curpc, rx, MASK5, f);
-			goto Top;
+			goto Again;
 		case 48:
 			switch(f) {
 			case 0:	mixinc(m, &ra);	break;
 			case 1: mixinc(-m, &ra);	break;
-			case 2:	ra = m < 0 ? -m|SIGNB : m;	break;	/* ENTA */
-			case 3:	ra = m > 0 ? m|SIGNB : -m;	break;	/* ENNA */
+			case 2:
+				ra = m == 0
+					? inst & SIGNB
+					: m < 0 ? -m|SIGNB : m;
+				break;	/* ENTA */
+			case 3:
+				ra = m == 0
+					? ~inst & SIGNB
+					: m > 0 ? m|SIGNB : -m;
+				break;	/* ENNA */
 			}
 			break;
 		case 49: case 50: case 51:
@@ -1073,16 +1083,30 @@ Top:
 			switch(f) {
 			case 0:	mixinc(m, ri+(c-48));	break;
 			case 1:	mixinc(-m, ri+(c-48));	break;
-			case 2:	ri[c-48] = m < 0 ? -m|SIGNB : m;	break;	/* ENT[1-6] */
-			case 3:	ri[c-48] = m > 0 ? m|SIGNB : -m;	break;	/* ENN[1-6] */
+			case 2:
+				ri[c-48] = m == 0
+					? inst & SIGNB
+					: m < 0 ? -m|SIGNB : m;
+				break;	/* ENT[1-6] */
+			case 3:
+				ri[c-48] = m == 0
+					? ~inst & SIGNB
+					: m > 0 ? m|SIGNB : -m;
+				break;	/* ENN[1-6] */
 			}
 			break;
 		case 55:
 			switch(f) {
 			case 0:	mixinc(m, &rx);	break;
 			case 1: mixinc(-m, &rx);	break;
-			case 2:	rx = m < 0 ? -m|SIGNB : m;	break;	/* ENTX */
-			case 3:	rx = m > 0 ? m|SIGNB : -m;	break;	/* ENNX */
+			case 2:	rx = m == 0
+					? inst & SIGNB
+					: m < 0 ? -m|SIGNB : m;
+				break;	/* ENTX */
+			case 3:	rx = m == 0
+					? ~inst & SIGNB
+					: m > 0 ? m|SIGNB : -m;
+				break;	/* ENNX */
 			}
 			break;
 		case 56:
@@ -1100,6 +1124,7 @@ Top:
 			break;
 		}
 		curpc++;
+Again:
 		if(once)
 			return curpc;
 	}

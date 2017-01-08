@@ -28,8 +28,8 @@ struct Con {
 };
 
 int mixvm(int, int);
-void repl(void);
-u32int fset(u32int, u32int, int);
+void repl(int);
+u32int mixst(u32int, u32int, int);
 
 void mixprint(int, int);
 
