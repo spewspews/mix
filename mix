@@ -1,6 +1,8 @@
 .TH MIX 1
 .SH NAME
-mix \- MIX assembler and emulator
+mix \- 
+.B MIX
+assembler and emulator
 .SH SYNOPSIS
 .B games/mix
 [
@@ -10,7 +12,7 @@ mix \- MIX assembler and emulator
 .I Mix
 is an assembler and emulator for Donald Knuth's
 fictitious
-.I MIX 
+.B MIX 
 architecture. The command assembles the named 
 .B MIXAL
 files into memory and then presents a command

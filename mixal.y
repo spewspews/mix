@@ -10,7 +10,6 @@
 	Sym *sym;
 	long lval;
 	u32int mval;
-	Rune r;
 	Rune *rbuf;
 }
 

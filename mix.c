@@ -898,7 +898,6 @@ mixcmp(int m, int f, u32int r)
 
 	v1 = V(r, f);
 	v2 = V(cells[m], f);
-//	print("mixcmp: v1 v2 %d %d\n", v1, v2);
 	if(v1 < v2)
 		cl = 1;
 	else if(v1 > v2)
@@ -915,7 +914,6 @@ mixvm(int ip, int once)
 
 	curpc = ip;
 	for (;;) {
-//		prinst(curpc);
 		if(curpc < 0 || curpc > 4000)
 			vmerror("Bad PC %d", curpc);
 		if(bp[curpc] && !once)
